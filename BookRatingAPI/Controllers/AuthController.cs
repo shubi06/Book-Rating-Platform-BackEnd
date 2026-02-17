@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using BookRatingAPI.DTOs.AuthDTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Mvc;

@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs.AuthDTOs;
 using BookRatingAPI.Models;

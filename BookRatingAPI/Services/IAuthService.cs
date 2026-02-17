@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using BookRatingAPI.DTOs.AuthDTOs;
 
 namespace BookRatingAPI.Services;

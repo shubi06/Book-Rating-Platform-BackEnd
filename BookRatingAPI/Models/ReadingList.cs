@@ -1,3 +1,4 @@
+using System;
 using BookRatingAPI.Models.Enums;
 
 namespace BookRatingAPI.Models;
