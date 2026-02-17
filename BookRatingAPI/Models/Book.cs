@@ -29,4 +29,7 @@ public class Book
     
     public ICollection<Rating> Ratings { get; set; } = new List<Rating>();
     public ICollection<ReadingList> ReadingLists { get; set; } = new List<ReadingList>();
+
+	public double AverageRating { get; set; } = 0;
+
 }
