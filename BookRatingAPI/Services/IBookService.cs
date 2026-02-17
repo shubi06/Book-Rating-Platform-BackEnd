@@ -1,14 +1,14 @@
 using BookRatingAPI.DTOs;
-using BookRatingAPI.Models;
 
 namespace BookRatingAPI.Services
 {
     public interface IBookService
     {
-        Task createBookAsync(Book book);
-        Task<Book?> getBookByIdAsync(int id);
-        Task<ICollection<Book>> getAllBooksAsync();
-        Task<Book?> updateBookAsync(int id, UpdateBookDto dto);
-        Task<bool> deleteBookAsync(int id);
+        Task<BookDto> CreateBookAsync(CreateBookDto dto);
+        Task<BookDto?> GetBookByIdAsync(int id);
+        Task<List<BookDto>> GetBooksAsync(string? search, int? categotyId);
+        Task<BookDto?> UpdateBookAsync(int id, CreateBookDto dto);
+        Task<bool> DeleteBookAsync(int id);
+        Task<int> ReindexBooksAsync();
     }
 }
