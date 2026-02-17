@@ -1,0 +1,16 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\BookRatingAPI",
+    "\\BookRatingAPI\\Data",
+    "\\BookRatingAPI\\DTOs",
+    "\\BookRatingAPI\\DTOs\\AuthDTOs",
+    "\\BookRatingAPI\\Services",
+    "\\frontend",
+    "\\frontend\\src\\app",
+    "\\frontend\\src\\app\\login",
+    "\\frontend\\src\\services"
+  ],
+  "SelectedNode": "\\BookRatingAPI\\Services\\TokenService.cs",
+  "PreviewInSolutionExplorer": false
+}
