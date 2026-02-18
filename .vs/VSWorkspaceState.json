@@ -6,11 +6,8 @@
     "\\BookRatingAPI\\DTOs",
     "\\BookRatingAPI\\DTOs\\AuthDTOs",
     "\\BookRatingAPI\\Services",
-    "\\frontend",
-    "\\frontend\\src\\app",
-    "\\frontend\\src\\app\\login",
-    "\\frontend\\src\\services"
+    "\\frontend"
   ],
-  "SelectedNode": "\\BookRatingAPI\\Services\\TokenService.cs",
+  "SelectedNode": "\\BookRatingAPI\\Services\\ProfileService.cs",
   "PreviewInSolutionExplorer": false
 }
