@@ -1,7 +1,10 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.Models;
+using BookRatingAPI.Models.Enums;
 using Microsoft.EntityFrameworkCore;
 
 namespace BookRatingAPI.Services;
@@ -46,9 +49,38 @@ public class ReadingListService : IReadingListService
             BookTitle = book.Title,
             BookAuthor = book.Author,
             CoverImageUrl = book.CoverImageUrl,
+            BookCategory = book.Category?.Name ?? string.Empty,
             Status = entry.Status,
             StatusName = entry.Status.ToString(),
             AddedAt = entry.AddedAt
         }, null);
+    }
+
+    public async Task<List<ReadingListEntryDto>> GetReadingListAsync(int userId, ReadingStatus? status)
+    {
+        var query = _context.ReadingLists
+            .Include(rl => rl.Book)
+                .ThenInclude(b => b.Category)
+            .Where(rl => rl.UserId == userId);
+
+        if (status.HasValue)
+            query = query.Where(rl => rl.Status == status.Value);
+
+        var entries = await query
+            .OrderByDescending(rl => rl.AddedAt)
+            .ToListAsync();
+
+        return entries.Select(rl => new ReadingListEntryDto
+        {
+            Id = rl.Id,
+            BookId = rl.Book.Id,
+            BookTitle = rl.Book.Title,
+            BookAuthor = rl.Book.Author,
+            CoverImageUrl = rl.Book.CoverImageUrl,
+            BookCategory = rl.Book.Category?.Name ?? string.Empty,
+            Status = rl.Status,
+            StatusName = rl.Status.ToString(),
+            AddedAt = rl.AddedAt
+        }).ToList();
     }
 }
