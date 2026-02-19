@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;

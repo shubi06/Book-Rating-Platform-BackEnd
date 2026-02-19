@@ -1,4 +1,7 @@
-﻿namespace BookRatingAPI.DTOs;
+﻿using System;
+using System.Collections.Generic;
+
+namespace BookRatingAPI.DTOs;
 
 public class ProfileDto
 {
