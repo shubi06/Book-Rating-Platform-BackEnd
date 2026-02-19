@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Threading.Tasks;
 using BookRatingAPI.DTOs;
+using BookRatingAPI.Models.Enums;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -17,6 +18,17 @@ public class ReadingListController : ControllerBase
     public ReadingListController(IReadingListService readingListService)
     {
         _readingListService = readingListService;
+    }
+
+    [HttpGet]
+    public async Task<ActionResult<List<ReadingListEntryDto>>> GetReadingList([FromQuery] ReadingStatus? status)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userIdClaim == null || !int.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var entries = await _readingListService.GetReadingListAsync(userId, status);
+        return Ok(entries);
     }
 
     [HttpPost]
