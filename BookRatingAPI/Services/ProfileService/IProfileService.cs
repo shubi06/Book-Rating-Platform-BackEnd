@@ -1,5 +1,6 @@
 ﻿using System.Threading.Tasks;
 using BookRatingAPI.DTOs;
+using BookRatingAPI.DTOs.ProfileDTOs;
 
 namespace BookRatingAPI.Services;
 

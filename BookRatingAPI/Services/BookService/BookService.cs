@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
+using BookRatingAPI.DTOs.BookDTOs;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;

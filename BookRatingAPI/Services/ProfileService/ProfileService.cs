@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
+using BookRatingAPI.DTOs.ProfileDTOs;
 
 namespace BookRatingAPI.Services;
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using BookRatingAPI.DTOs;
+using BookRatingAPI.DTOs.BookDTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

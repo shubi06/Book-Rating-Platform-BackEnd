@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Threading.Tasks;
 using BookRatingAPI.DTOs;
+using BookRatingAPI.DTOs.ProfileDTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
