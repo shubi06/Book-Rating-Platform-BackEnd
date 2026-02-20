@@ -1,4 +1,6 @@
-﻿namespace BookRatingAPI.DTOs
+﻿using System;
+
+namespace BookRatingAPI.DTOs
 {
 	public class RatingDto
 	{
