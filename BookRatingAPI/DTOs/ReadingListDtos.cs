@@ -13,6 +13,12 @@ public class AddToReadingListDto
     public ReadingStatus Status { get; set; }
 }
 
+public class UpdateReadingListStatusDto
+{
+    [Required]
+    public ReadingStatus Status { get; set; }
+}
+
 public class ReadingListEntryDto
 {
     public int Id { get; set; }
