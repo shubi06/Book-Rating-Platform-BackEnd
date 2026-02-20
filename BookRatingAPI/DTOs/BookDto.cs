@@ -35,26 +35,4 @@ public class CreateBookDto
     public int CategoryId { get; set; }
 }
 
-public class RatingDto
-{
-    public int Id { get; set; }
-    public int BookId { get; set; }
-    public int UserId { get; set; }
-    public string Username { get; set; } = string.Empty;
-    public int Score { get; set; }
-    public string? Comment { get; set; }
-    public DateTime CreatedAt { get; set; }
-}
 
-public class CreateRatingDto
-{
-    [Required]
-    public int BookId { get; set; }
-
-    [Required]
-    [Range(1, 5)]
-    public int Score { get; set; }
-
-    [MaxLength(1000)]
-    public string? Comment { get; set; }
-}
