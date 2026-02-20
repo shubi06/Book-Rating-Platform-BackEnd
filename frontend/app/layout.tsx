@@ -1,0 +1,19 @@
+import type { Metadata } from "next";
+import "@/apps/globals.css";
+
+export const metadata: Metadata = {
+  title: "Book Rating Platform",
+  description: "Discover, rate, and review books",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body className="antialiased">{children}</body>
+    </html>
+  );
+}
