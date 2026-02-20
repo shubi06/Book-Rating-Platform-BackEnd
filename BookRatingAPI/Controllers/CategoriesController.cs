@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using BookRatingAPI.Models;
+using BookRatingAPI.DTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -28,7 +28,7 @@ public class CategoriesController : ControllerBase
     /// <returns>List of all categories</returns>
     [AllowAnonymous]
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Category>>> GetCategories()
+    public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories()
     {
         var categories = await _categoryService.GetAllCategoriesAsync();
         return Ok(categories);
@@ -37,12 +37,12 @@ public class CategoriesController : ControllerBase
     /// <summary>
     /// Create a new category
     /// </summary>
-    /// <param name="category">Category data</param>
+    /// <param name="dto">Category data</param>
     /// <returns>The created category</returns>
     [HttpPost]
-    public async Task<ActionResult<Category>> CreateCategory(Category category)
+    public async Task<ActionResult<CategoryDto>> CreateCategory(CreateCategoryDto dto)
     {
-        var created = await _categoryService.CreateCategoryAsync(category);
+        var created = await _categoryService.CreateCategoryAsync(dto);
         return CreatedAtAction(nameof(GetCategories), new { id = created.Id }, created);
     }
 
@@ -50,12 +50,12 @@ public class CategoriesController : ControllerBase
     /// Update an existing category
     /// </summary>
     /// <param name="id">The ID of the category to update</param>
-    /// <param name="category">Updated category data</param>
+    /// <param name="dto">Updated category data</param>
     /// <returns>The updated category</returns>
     [HttpPut("{id}")]
-    public async Task<ActionResult<Category>> UpdateCategory(int id, Category category)
+    public async Task<ActionResult<CategoryDto>> UpdateCategory(int id, CreateCategoryDto dto)
     {
-        var updated = await _categoryService.UpdateCategoryAsync(id, category);
+        var updated = await _categoryService.UpdateCategoryAsync(id, dto);
 
         if (updated == null)
             return NotFound();

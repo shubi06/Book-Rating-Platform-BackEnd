@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using BookRatingAPI.Models;
+using BookRatingAPI.DTOs;
 
 namespace BookRatingAPI.Services;
 
 public interface ICategoryService
 {
-    Task<List<Category>> GetAllCategoriesAsync();
-    Task<Category> CreateCategoryAsync(Category category);
-    Task<Category?> UpdateCategoryAsync(int id, Category category);
+    Task<List<CategoryDto>> GetAllCategoriesAsync();
+    Task<CategoryDto> CreateCategoryAsync(CreateCategoryDto dto);
+    Task<CategoryDto?> UpdateCategoryAsync(int id, CreateCategoryDto dto);
     Task<bool> DeleteCategoryAsync(int id);
 }
