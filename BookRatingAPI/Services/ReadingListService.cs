@@ -83,4 +83,44 @@ public class ReadingListService : IReadingListService
             AddedAt = rl.AddedAt
         }).ToList();
     }
+
+    public async Task<(ReadingListEntryDto? Entry, string? Error)> UpdateStatusAsync(int userId, int entryId, UpdateReadingListStatusDto dto)
+    {
+        var entry = await _context.ReadingLists
+            .Include(rl => rl.Book)
+                .ThenInclude(b => b.Category)
+            .FirstOrDefaultAsync(rl => rl.Id == entryId && rl.UserId == userId);
+
+        if (entry == null)
+            return (null, "Reading list entry not found.");
+
+        entry.Status = dto.Status;
+        await _context.SaveChangesAsync();
+
+        return (new ReadingListEntryDto
+        {
+            Id = entry.Id,
+            BookId = entry.Book.Id,
+            BookTitle = entry.Book.Title,
+            BookAuthor = entry.Book.Author,
+            CoverImageUrl = entry.Book.CoverImageUrl,
+            BookCategory = entry.Book.Category?.Name ?? string.Empty,
+            Status = entry.Status,
+            StatusName = entry.Status.ToString(),
+            AddedAt = entry.AddedAt
+        }, null);
+    }
+
+    public async Task<bool> RemoveFromReadingListAsync(int userId, int entryId)
+    {
+        var entry = await _context.ReadingLists
+            .FirstOrDefaultAsync(rl => rl.Id == entryId && rl.UserId == userId);
+
+        if (entry == null)
+            return false;
+
+        _context.ReadingLists.Remove(entry);
+        await _context.SaveChangesAsync();
+        return true;
+    }
 }
