@@ -79,25 +79,50 @@ namespace BookRatingAPI.Services
             var mustQueries = new List<Func<QueryContainerDescriptor<BookDto>, QueryContainer>>();
 
             if (!string.IsNullOrWhiteSpace(title))
-                mustQueries.Add(q => q.Match(t => t.Field(f => f.Title).Query(title)));
+            {
+                mustQueries.Add(q =>
+                    q.Fuzzy(fz => fz.Field(f => f.Title).Value(title).Fuzziness(Fuzziness.Auto))
+                );
+            }
 
             if (!string.IsNullOrWhiteSpace(author))
-                mustQueries.Add(q => q.Match(t => t.Field(f => f.Author).Query(author)));
+            {
+                mustQueries.Add(q =>
+                    q.Fuzzy(fz => fz.Field(f => f.Author).Value(author).Fuzziness(Fuzziness.Auto))
+                );
+            }
 
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("Books").Size(10000).Query(q => q.Bool(b => b.Must(mustQueries)))
-            );
+            {
+                s.Index("books").Size(10000);
+
+                if (mustQueries.Any())
+                    s.Query(q => q.Bool(b => b.Must(mustQueries)));
+                else
+                    s.Query(q => q.MatchAll());
+
+                return s;
+            });
 
             if (!searchResponse.IsValid)
-                _logger.LogInformation("Search not valid!");
+                _logger.LogError(
+                    "Elasticsearch search failed: {DebugInfo}",
+                    searchResponse.DebugInformation
+                );
+            else
+                _logger.LogInformation(
+                    "Elasticsearch query executed: {DebugInfo}",
+                    searchResponse.DebugInformation
+                );
 
             var books = searchResponse.Documents.ToList();
 
-            if (
-                (!string.IsNullOrWhiteSpace(title) || !string.IsNullOrWhiteSpace(author))
-                && !books.Any()
-            )
-                _logger.LogInformation("Title or Author not Found!");
+            if (!books.Any())
+                _logger.LogInformation(
+                    "No books found. Title='{Title}', Author='{Author}'",
+                    title,
+                    author
+                );
 
             return books;
         }
@@ -105,7 +130,7 @@ namespace BookRatingAPI.Services
         public async Task<List<BookDto>> GetTopRatedBooks()
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("Books")
+                s.Index("books")
                     .Size(10)
                     .Query(q => q.MatchAll())
                     .Sort(s =>
@@ -124,7 +149,7 @@ namespace BookRatingAPI.Services
         public async Task<List<BookDto>> GetBooksByCategory(CategoryDto category)
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("Books")
+                s.Index("books")
                     .Size(10000)
                     .Query(q =>
                     {
@@ -151,7 +176,7 @@ namespace BookRatingAPI.Services
         public async Task<List<BookDto>> GetBooksByYear(int year)
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("Books")
+                s.Index("books")
                     .Size(10000)
                     .Query(q =>
                         q.Bool(b =>
@@ -171,7 +196,7 @@ namespace BookRatingAPI.Services
         public async Task<List<BookDto>> RatingFiltering(int rating)
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("Books")
+                s.Index("books")
                     .Size(10000)
                     .Query(q =>
                         q.Range(r =>
@@ -193,7 +218,7 @@ namespace BookRatingAPI.Services
         public async Task<List<BookDto>> Sort(string sortBy, string sortOrder)
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("Books").Query(q => q.MatchAll()).Sort(GetSort(sortBy, sortOrder))
+                s.Index("books").Query(q => q.MatchAll()).Sort(GetSort(sortBy, sortOrder))
             );
 
             var books = searchResponse.Documents.ToList();

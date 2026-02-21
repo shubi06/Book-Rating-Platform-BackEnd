@@ -65,12 +65,17 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 );
 builder.Services.AddSingleton<IElasticClient>(sp =>
 {
-    var uri = builder.Configuration["Elasticsearch:Uri"];
-    var defaultIndex = builder.Configuration["Elasticsearch:DefaultIndex"];
+    var config = builder.Configuration.GetSection("Elasticsearch");
+    var uri = config["Uri"];
+    var defaultIndex = config["DefaultIndex"];
+    var username = config["Username"];
+    var password = config["Password"];
 
     var settings = new ConnectionSettings(new Uri(uri))
         .DefaultIndex(defaultIndex)
         .DefaultMappingFor<Book>(m => m.IdProperty(p => p.Id))
+        .BasicAuthentication(username, password)
+        .ServerCertificateValidationCallback((o, cert, chain, errors) => true)
         .DisableDirectStreaming();
 
     return new ElasticClient(settings);
