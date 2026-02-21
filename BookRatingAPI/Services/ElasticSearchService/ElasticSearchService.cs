@@ -29,12 +29,14 @@ namespace BookRatingAPI.Services
             int totalMigrated = 0;
 
             var totalCount = await _context.Books.CountAsync();
-            _logger.LogInformation("Starting migration of {totalCount} records", totalCount);
+            _logger.LogInformation("Starting migration of {totalCount} books", totalCount);
 
             for (int i = 0; i < totalCount; i += batchSize)
             {
                 var batch = await _context
-                    .Books.OrderBy(b => b.Id)
+                    .Books.Include(b => b.Category)
+                    .Include(b => b.Ratings)
+                    .OrderBy(b => b.Id)
                     .Skip(i)
                     .Take(batchSize)
                     .ToListAsync();
@@ -67,7 +69,7 @@ namespace BookRatingAPI.Services
                             item.Error.Reason
                         );
                 }
-                totalMigrated += batch.Count;
+                totalMigrated += batchToIndex.Count;
                 _logger.LogInformation("Migrated {Count} / {Total}", totalMigrated, totalCount);
             }
         }
@@ -77,10 +79,10 @@ namespace BookRatingAPI.Services
             var mustQueries = new List<Func<QueryContainerDescriptor<BookDto>, QueryContainer>>();
 
             if (!string.IsNullOrWhiteSpace(title))
-                mustQueries.Add(q => q.Term(t => t.Field(f => f.Title).Value(title)));
+                mustQueries.Add(q => q.Match(t => t.Field(f => f.Title).Query(title)));
 
             if (!string.IsNullOrWhiteSpace(author))
-                mustQueries.Add(q => q.Term(t => t.Field(f => f.Author).Value(author)));
+                mustQueries.Add(q => q.Match(t => t.Field(f => f.Author).Query(author)));
 
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
                 s.Index("Books").Size(10000).Query(q => q.Bool(b => b.Must(mustQueries)))
@@ -126,7 +128,7 @@ namespace BookRatingAPI.Services
                     .Size(10000)
                     .Query(q =>
                     {
-                        if (!string.IsNullOrWhiteSpace(category.Name))
+                        if (string.IsNullOrWhiteSpace(category.Name))
                             _logger.LogInformation("Category Field Empty!");
 
                         return q.Bool(b =>
@@ -172,8 +174,10 @@ namespace BookRatingAPI.Services
                 s.Index("Books")
                     .Size(10000)
                     .Query(q =>
-                        q.Bool(b =>
-                            b.Must(q => q.Term(t => t.Field(f => Math.Floor(f.AverageRating))))
+                        q.Range(r =>
+                            r.Field(f => f.AverageRating)
+                                .GreaterThanOrEquals(rating)
+                                .LessThan(rating + 1)
                         )
                     )
             );
@@ -189,7 +193,7 @@ namespace BookRatingAPI.Services
         public async Task<List<BookDto>> Sort(string sortBy, string sortOrder)
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("books").Query(q => q.MatchAll()).Sort(GetSort(sortBy, sortOrder))
+                s.Index("Books").Query(q => q.MatchAll()).Sort(GetSort(sortBy, sortOrder))
             );
 
             var books = searchResponse.Documents.ToList();
