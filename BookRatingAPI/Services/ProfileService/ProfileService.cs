@@ -35,6 +35,7 @@ public class ProfileService : IProfileService
             Stats = new ProfileStatsDto
             {
                 TotalRatings = user.Ratings.Count,
+                //Calculate average score; default 0 if no ratings exist
                 AverageRating = user.Ratings.Any() ? user.Ratings.Average(r => r.Score) : 0,
                 BooksInReadingList = user.ReadingLists.Count
             }
@@ -62,6 +63,7 @@ public class ProfileService : IProfileService
                 AverageRating = user.Ratings.Any() ? user.Ratings.Average(r => r.Score) : 0,
                 BooksInReadingList = 0 // Don't expose reading list count publicly
             },
+            //Map only the 5 most recent ratings
             RecentRatings = user.Ratings
                 .OrderByDescending(r => r.CreatedAt)
                 .Take(5)
