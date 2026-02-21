@@ -1,0 +1,258 @@
+using BookRatingAPI.Data;
+using BookRatingAPI.DTOs;
+using BookRatingAPI.Models;
+using Microsoft.EntityFrameworkCore;
+using Nest;
+
+namespace BookRatingAPI.Services
+{
+    public class ElasticSearchService : IElasticSearchService
+    {
+        private readonly AppDbContext _context;
+        private readonly IElasticClient _elastic;
+        private readonly ILogger<ElasticSearchService> _logger;
+
+        public ElasticSearchService(
+            AppDbContext context,
+            IElasticClient elastic,
+            ILogger<ElasticSearchService> logger
+        )
+        {
+            _context = context;
+            _elastic = elastic;
+            _logger = logger;
+        }
+
+        public async Task Migrate()
+        {
+            const int batchSize = 500;
+            int totalMigrated = 0;
+
+            var totalCount = await _context.Books.CountAsync();
+            _logger.LogInformation("Starting migration of {totalCount} records", totalCount);
+
+            for (int i = 0; i < totalCount; i += batchSize)
+            {
+                var batch = await _context
+                    .Books.OrderBy(b => b.Id)
+                    .Skip(i)
+                    .Take(batchSize)
+                    .ToListAsync();
+
+                if (!batch.Any())
+                    continue;
+
+                var batchToIndex = batch.Select(b => MapToDto(b)).ToList();
+
+                var response = await _elastic.BulkAsync(b =>
+                    b.IndexMany(
+                            batchToIndex,
+                            (descriptor, doc) =>
+                            {
+                                if (doc.Id == 0)
+                                    throw new InvalidOperationException("Book Id cannot be 0");
+
+                                return descriptor.Id(doc.Id);
+                            }
+                        )
+                        .Refresh(Elasticsearch.Net.Refresh.WaitFor)
+                );
+
+                if (response.Errors)
+                {
+                    foreach (var item in response.ItemsWithErrors)
+                        _logger.LogError(
+                            "Failed Book {Id}: {Error.Reason}",
+                            item.Id,
+                            item.Error.Reason
+                        );
+                }
+                totalMigrated += batch.Count;
+                _logger.LogInformation("Migrated {Count} / {Total}", totalMigrated, totalCount);
+            }
+        }
+
+        public async Task<List<BookDto>> GetBooksElastic(string? title, string? author)
+        {
+            var mustQueries = new List<Func<QueryContainerDescriptor<BookDto>, QueryContainer>>();
+
+            if (!string.IsNullOrWhiteSpace(title))
+                mustQueries.Add(q => q.Term(t => t.Field(f => f.Title).Value(title)));
+
+            if (!string.IsNullOrWhiteSpace(author))
+                mustQueries.Add(q => q.Term(t => t.Field(f => f.Author).Value(author)));
+
+            var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
+                s.Index("Books").Size(10000).Query(q => q.Bool(b => b.Must(mustQueries)))
+            );
+
+            if (!searchResponse.IsValid)
+                _logger.LogInformation("Search not valid!");
+
+            var books = searchResponse.Documents.ToList();
+
+            if (
+                (!string.IsNullOrWhiteSpace(title) || !string.IsNullOrWhiteSpace(author))
+                && !books.Any()
+            )
+                _logger.LogInformation("Title or Author not Found!");
+
+            return books;
+        }
+
+        public async Task<List<BookDto>> GetTopRatedBooks()
+        {
+            var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
+                s.Index("Books")
+                    .Size(10)
+                    .Query(q => q.MatchAll())
+                    .Sort(s =>
+                        s.Field(f => f.AverageRating, SortOrder.Descending)
+                            .Field(f => f.RatingCount, SortOrder.Descending)
+                    )
+            );
+
+            var books = searchResponse.Documents.ToList();
+            if (!books.Any())
+                _logger.LogInformation("Books Empty");
+
+            return books;
+        }
+
+        public async Task<List<BookDto>> GetBooksByCategory(CategoryDto category)
+        {
+            var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
+                s.Index("Books")
+                    .Size(10000)
+                    .Query(q =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(category.Name))
+                            _logger.LogInformation("Category Field Empty!");
+
+                        return q.Bool(b =>
+                            b.Must(q =>
+                                q.Term(t =>
+                                    t.Field(f => f.CategoryName).Value(category.Name.ToString())
+                                )
+                            )
+                        );
+                    })
+            );
+
+            var books = searchResponse.Documents.ToList();
+            if (!books.Any())
+                _logger.LogInformation("Books Empty");
+
+            return books;
+        }
+
+        public async Task<List<BookDto>> GetBooksByYear(int year)
+        {
+            var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
+                s.Index("Books")
+                    .Size(10000)
+                    .Query(q =>
+                        q.Bool(b =>
+                            b.Must(q => q.Term(t => t.Field(f => f.PublicationYear).Value(year)))
+                        )
+                    )
+            );
+
+            var books = searchResponse.Documents.ToList();
+
+            if (!books.Any())
+                _logger.LogInformation("Books Empty");
+
+            return books;
+        }
+
+        public async Task<List<BookDto>> RatingFiltering(int rating)
+        {
+            var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
+                s.Index("Books")
+                    .Size(10000)
+                    .Query(q =>
+                        q.Bool(b =>
+                            b.Must(q => q.Term(t => t.Field(f => Math.Floor(f.AverageRating))))
+                        )
+                    )
+            );
+
+            var books = searchResponse.Documents.ToList();
+
+            if (!books.Any())
+                _logger.LogInformation("Books Empty");
+
+            return books;
+        }
+
+        public async Task<List<BookDto>> Sort(string sortBy, string sortOrder)
+        {
+            var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
+                s.Index("books").Query(q => q.MatchAll()).Sort(GetSort(sortBy, sortOrder))
+            );
+
+            var books = searchResponse.Documents.ToList();
+
+            if (!books.Any())
+                _logger.LogInformation("Books Empty");
+
+            return books;
+        }
+
+        private static BookDto MapToDto(Book book)
+        {
+            return new BookDto
+            {
+                Id = book.Id,
+                Title = book.Title,
+                Author = book.Author,
+                Description = book.Description,
+                CoverImageUrl = book.CoverImageUrl,
+                PublicationYear = book.PublicationYear,
+                ISBN = book.ISBN,
+                CategoryId = book.CategoryId,
+                CategoryName = book.Category.Name,
+                AverageRating = book.Ratings.Any() ? book.Ratings.Average(r => r.Score) : 0,
+                RatingCount = book.Ratings.Count,
+            };
+        }
+
+        private Func<SortDescriptor<BookDto>, IPromise<IList<ISort>>> GetSort(
+            string sortBy,
+            string sortOrder
+        )
+        {
+            var ascending = sortOrder.ToLower() == "asc";
+
+            return s =>
+            {
+                switch (sortBy.ToLower())
+                {
+                    case "title":
+                        return ascending
+                            ? s.Ascending("title.keyword")
+                            : s.Descending("title.keyword");
+
+                    case "author":
+                        return ascending
+                            ? s.Ascending("author.keyword")
+                            : s.Descending("author.keyword");
+
+                    case "rating":
+                        return ascending
+                            ? s.Ascending(f => f.AverageRating).Ascending(f => f.RatingCount)
+                            : s.Descending(f => f.AverageRating).Descending(f => f.RatingCount);
+
+                    case "year":
+                        return ascending
+                            ? s.Ascending(f => f.PublicationYear)
+                            : s.Descending(f => f.PublicationYear);
+
+                    default:
+                        return s.Descending(f => f.AverageRating);
+                }
+            };
+        }
+    }
+}

@@ -1,14 +1,11 @@
-using System;
 using System.Text;
 using BookRatingAPI.Data;
+using BookRatingAPI.Models;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
+using Nest;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,11 +19,11 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc(
         "v1",
-        new Microsoft.OpenApi.Models.OpenApiInfo 
-        { 
-            Title = "Book Rating API", 
+        new Microsoft.OpenApi.Models.OpenApiInfo
+        {
+            Title = "Book Rating API",
             Version = "v1",
-            Description = "API for managing book ratings and reviews"
+            Description = "API for managing book ratings and reviews",
         }
     );
 
@@ -35,7 +32,8 @@ builder.Services.AddSwaggerGen(c =>
         "Bearer",
         new Microsoft.OpenApi.Models.OpenApiSecurityScheme
         {
-            Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token.",
+            Description =
+                "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token.",
             Name = "Authorization",
             In = Microsoft.OpenApi.Models.ParameterLocation.Header,
             Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
@@ -65,6 +63,18 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
 );
+builder.Services.AddSingleton<IElasticClient>(sp =>
+{
+    var uri = builder.Configuration["Elasticsearch:Uri"];
+    var defaultIndex = builder.Configuration["Elasticsearch:DefaultIndex"];
+
+    var settings = new ConnectionSettings(new Uri(uri))
+        .DefaultIndex(defaultIndex)
+        .DefaultMappingFor<Book>(m => m.IdProperty(p => p.Id))
+        .DisableDirectStreaming();
+
+    return new ElasticClient(settings);
+});
 
 // Register application services
 builder.Services.AddScoped<ITokenService, TokenService>();
@@ -74,10 +84,11 @@ builder.Services.AddScoped<IRatingService, RatingService>();
 builder.Services.AddScoped<IReadingListService, ReadingListService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IElasticSearchService, ElasticSearchService>();
 
 // Configure JWT authentication
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+builder
+    .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -97,13 +108,17 @@ builder.Services
 // Configure CORS
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy.WithOrigins("http://localhost:3000")
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
+    options.AddPolicy(
+        "AllowFrontend",
+        policy =>
+        {
+            policy
+                .WithOrigins("http://localhost:3000")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        }
+    );
 });
 
 var app = builder.Build();

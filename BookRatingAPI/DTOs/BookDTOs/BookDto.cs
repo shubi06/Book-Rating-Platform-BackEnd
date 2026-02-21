@@ -1,6 +1,3 @@
-using System;
-using System.ComponentModel.DataAnnotations;
-
 namespace BookRatingAPI.DTOs;
 
 public class BookDto
@@ -17,6 +14,3 @@ public class BookDto
     public double AverageRating { get; set; }
     public int RatingCount { get; set; }
 }
-
-
-
