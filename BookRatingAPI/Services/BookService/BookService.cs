@@ -115,6 +115,7 @@ public class BookService : IBookService
 
         _context.Books.Add(book);
         await _context.SaveChangesAsync();
+        await _elastic.UpsertBook(book.Id);
 
         // Load category for DTO mapping
         await _context.Entry(book).Reference(b => b.Category).LoadAsync();
@@ -150,6 +151,7 @@ public class BookService : IBookService
         book.CategoryId = dto.CategoryId;
 
         await _context.SaveChangesAsync();
+        await _elastic.UpsertBook(id);
 
         // Clear cache after modification
         _cache.Remove($"book:{id}");
@@ -160,8 +162,6 @@ public class BookService : IBookService
             .Books.Include(b => b.Category)
             .Include(b => b.Ratings)
             .FirstOrDefaultAsync(b => b.Id == id);
-
-        await _elastic.UpsertBook(id);
 
         return updatedBook != null ? MapToDto(updatedBook) : null;
     }
@@ -182,11 +182,11 @@ public class BookService : IBookService
 
         _context.Books.Remove(book);
         await _context.SaveChangesAsync();
+        await _elastic.DeleteBook(id);
 
         // Clear cache after modification
         _cache.Remove($"book:{id}");
         ClearBooksCache();
-        await _elastic.DeleteBook(id);
 
         return true;
     }
