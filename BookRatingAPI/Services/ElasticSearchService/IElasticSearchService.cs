@@ -11,7 +11,7 @@ namespace BookRatingAPI.Services
         Task<List<BookDto>> GetBooksByYear(int year);
         Task<List<BookDto>> RatingFiltering(int rating);
         Task<List<BookDto>> Sort(string sortBy, string sortOrder);
-        Task UpsertBook(UpdateBookDto book);
+        Task UpsertBook(int id, CreateBookDto book);
         Task DeleteBook(int bookId);
     }
 }

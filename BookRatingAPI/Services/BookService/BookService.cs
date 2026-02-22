@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
-using BookRatingAPI.DTOs.BookDTOs;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -18,13 +17,15 @@ public class BookService : IBookService
 {
     private readonly AppDbContext _context;
     private readonly IMemoryCache _cache;
+    private readonly IElasticSearchService _elastic;
     private const int CacheExpirationMinutes = 5;
     private const int BookCacheExpirationMinutes = 10;
 
-    public BookService(AppDbContext context, IMemoryCache cache)
+    public BookService(AppDbContext context, IMemoryCache cache, IElasticSearchService elastic)
     {
         _context = context;
         _cache = cache;
+        _elastic = elastic;
     }
 
     /// <summary>
@@ -49,10 +50,7 @@ public class BookService : IBookService
         }
 
         // Query database
-        var query = _context.Books
-            .Include(b => b.Category)
-            .Include(b => b.Ratings)
-            .AsQueryable();
+        var query = _context.Books.Include(b => b.Category).Include(b => b.Ratings).AsQueryable();
 
         if (categoryId.HasValue)
         {
@@ -83,8 +81,8 @@ public class BookService : IBookService
         }
 
         // Query database
-        var book = await _context.Books
-            .Include(b => b.Category)
+        var book = await _context
+            .Books.Include(b => b.Category)
             .Include(b => b.Ratings)
             .FirstOrDefaultAsync(b => b.Id == id);
 
@@ -162,10 +160,12 @@ public class BookService : IBookService
         ClearBooksCache();
 
         // Reload with related data
-        var updatedBook = await _context.Books
-            .Include(b => b.Category)
+        var updatedBook = await _context
+            .Books.Include(b => b.Category)
             .Include(b => b.Ratings)
             .FirstOrDefaultAsync(b => b.Id == id);
+
+        await _elastic.UpsertBook(id, dto);
 
         return updatedBook != null ? MapToDto(updatedBook) : null;
     }
@@ -211,13 +211,13 @@ public class BookService : IBookService
     /// <returns>List of matching books</returns>
     private async Task<List<BookDto>> SearchBooksAsync(string search)
     {
-        var books = await _context.Books
-            .Include(b => b.Category)
+        var books = await _context
+            .Books.Include(b => b.Category)
             .Include(b => b.Ratings)
             .Where(b =>
-                EF.Functions.Like(b.Title, $"%{search}%") ||
-                EF.Functions.Like(b.Author, $"%{search}%") ||
-                EF.Functions.Like(b.Description, $"%{search}%")
+                EF.Functions.Like(b.Title, $"%{search}%")
+                || EF.Functions.Like(b.Author, $"%{search}%")
+                || EF.Functions.Like(b.Description, $"%{search}%")
             )
             .ToListAsync();
 

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace BookRatingAPI.DTOs.BookDTOs;
+namespace BookRatingAPI.DTOs;
 
 public class CreateBookDto
 {
@@ -18,3 +18,4 @@ public class CreateBookDto
     [Required]
     public int CategoryId { get; set; }
 }
+
