@@ -7,9 +7,11 @@ namespace BookRatingAPI.Services
         Task Migrate();
         Task<List<BookDto>> GetBooksElastic(string? title, string? author);
         Task<List<BookDto>> GetTopRatedBooks();
-        Task<List<BookDto>> GetBooksByCategory(CategoryDto category);
+        Task<List<BookDto>> GetBooksByCategory(string category);
         Task<List<BookDto>> GetBooksByYear(int year);
         Task<List<BookDto>> RatingFiltering(int rating);
         Task<List<BookDto>> Sort(string sortBy, string sortOrder);
+        Task UpsertBook(UpdateBookDto book);
+        Task DeleteBook(int bookId);
     }
 }

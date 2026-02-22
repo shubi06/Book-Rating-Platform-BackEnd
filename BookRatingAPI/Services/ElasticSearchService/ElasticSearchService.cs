@@ -146,22 +146,18 @@ namespace BookRatingAPI.Services
             return books;
         }
 
-        public async Task<List<BookDto>> GetBooksByCategory(CategoryDto category)
+        public async Task<List<BookDto>> GetBooksByCategory(string category)
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
                 s.Index("books")
                     .Size(10000)
                     .Query(q =>
                     {
-                        if (string.IsNullOrWhiteSpace(category.Name))
+                        if (string.IsNullOrWhiteSpace(category))
                             _logger.LogInformation("Category Field Empty!");
 
                         return q.Bool(b =>
-                            b.Must(q =>
-                                q.Term(t =>
-                                    t.Field(f => f.CategoryName).Value(category.Name.ToString())
-                                )
-                            )
+                            b.Must(q => q.Term(t => t.Field(f => f.CategoryName).Value(category)))
                         );
                     })
             );
@@ -227,6 +223,49 @@ namespace BookRatingAPI.Services
                 _logger.LogInformation("Books Empty");
 
             return books;
+        }
+
+        public async Task UpsertBook(UpdateBookDto book)
+        {
+            var bookDto = new BookDto
+            {
+                Id = book.Id,
+                Title = book.Title ?? string.Empty,
+                Author = book.Author ?? string.Empty,
+                Description = book.Description ?? string.Empty,
+                CoverImageUrl = book.CoverImageUrl,
+                PublicationYear = book.PublicationYear ?? 0,
+                ISBN = book.ISBN,
+                CategoryId = book.CategoryId ?? 0,
+            };
+
+            var response = await _elastic.IndexAsync(
+                bookDto,
+                i => i.Index("books").Id(bookDto.Id).Refresh(Elasticsearch.Net.Refresh.True)
+            );
+
+            if (!response.IsValid)
+                _logger.LogError(
+                    "Failed to upsert Book {Id}: {Reason}",
+                    book.Id,
+                    response.OriginalException?.Message ?? response.ServerError?.ToString()
+                );
+            else
+                _logger.LogInformation("Upserted Book {Id} successfully", book.Id);
+        }
+
+        public async Task DeleteBook(int bookId)
+        {
+            var response = await _elastic.DeleteAsync<BookDto>(bookId, d => d.Index("books"));
+
+            if (!response.IsValid)
+                _logger.LogError(
+                    "Failed to delete Book {Id}: {Reason}",
+                    bookId,
+                    response.OriginalException?.Message ?? response.ServerError?.ToString()
+                );
+            else
+                _logger.LogInformation("Deleted Book {Id} successfully", bookId);
         }
 
         private static BookDto MapToDto(Book book)
