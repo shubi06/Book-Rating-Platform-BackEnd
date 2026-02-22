@@ -1,6 +1,5 @@
 using BookRatingAPI.DTOs;
 using BookRatingAPI.Services;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BookRatingAPI.Controllers
@@ -21,22 +20,6 @@ namespace BookRatingAPI.Controllers
             _elastic = elastic;
         }
 
-        [HttpPost("migrate")]
-        [Authorize(Roles = "Admin")]
-        public async Task<ActionResult> Migrate()
-        {
-            try
-            {
-                await _elastic.Migrate();
-                return Ok("Migration Succesfule!");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during Elasticsearch migration");
-                return StatusCode(500, "Migration failed!");
-            }
-        }
-
         [HttpGet("GetBooks")]
         public async Task<ActionResult<IEnumerable<BookDto>>> GetBooks(
             [FromQuery] string? title,
@@ -54,24 +37,22 @@ namespace BookRatingAPI.Controllers
             return Ok(books);
         }
 
-        [HttpGet("ByCategory")]
-        public async Task<ActionResult<IEnumerable<BookDto>>> GetByCategory(
-            [FromQuery] string category
-        )
+        [HttpGet("ByCategory/{category}")]
+        public async Task<ActionResult<IEnumerable<BookDto>>> GetByCategory(string category)
         {
             var books = await _elastic.GetBooksByCategory(category);
             return Ok(books);
         }
 
-        [HttpGet("ByYear")]
-        public async Task<ActionResult<IEnumerable<BookDto>>> GetByYear([FromQuery] int year)
+        [HttpGet("ByYear/{year}")]
+        public async Task<ActionResult<IEnumerable<BookDto>>> GetByYear(int year)
         {
             var books = await _elastic.GetBooksByYear(year);
             return Ok(books);
         }
 
-        [HttpGet("RatingFilter")]
-        public async Task<ActionResult<IEnumerable<BookDto>>> FilterByRating([FromQuery] int rating)
+        [HttpGet("RatingFilter/{rating}")]
+        public async Task<ActionResult<IEnumerable<BookDto>>> FilterByRating(int rating)
         {
             var books = await _elastic.RatingFiltering(rating);
             return Ok(books);
