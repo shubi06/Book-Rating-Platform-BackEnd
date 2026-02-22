@@ -11,12 +11,12 @@ namespace BookRatingAPI.Services;
 public class RatingService : IRatingService
 {
     private readonly AppDbContext _context;
-    private readonly IElasticSearchService _elastic;
+    private readonly IBookSyncService _sync;
 
-    public RatingService(AppDbContext context, IElasticSearchService elastic)
+    public RatingService(AppDbContext context, IBookSyncService sync)
     {
         _context = context;
-        _elastic = elastic;
+        _sync = sync;
     }
 
     /// <summary>
@@ -74,7 +74,7 @@ public class RatingService : IRatingService
 
         _context.Ratings.Add(rating);
         await _context.SaveChangesAsync();
-        await _elastic.UpsertBook(rating.BookId);
+        await _sync.SyncBookAsync(rating.BookId);
 
         // Load user information for DTO mapping
         var user = await _context.Users.FindAsync(userId);
@@ -103,7 +103,7 @@ public class RatingService : IRatingService
         rating.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
-        await _elastic.UpsertBook(rating.BookId);
+        await _sync.SyncBookAsync(rating.BookId);
 
         // Load user information for DTO mapping
         var user = await _context.Users.FindAsync(userId);
@@ -128,6 +128,7 @@ public class RatingService : IRatingService
 
         _context.Ratings.Remove(rating);
         await _context.SaveChangesAsync();
+        await _sync.RemoveBookAsync(rating.BookId);
 
         return true;
     }

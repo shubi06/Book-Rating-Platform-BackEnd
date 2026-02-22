@@ -13,15 +13,15 @@ public class BookService : IBookService
 {
     private readonly AppDbContext _context;
     private readonly IMemoryCache _cache;
-    private readonly IElasticSearchService _elastic;
+    private readonly IBookSyncService _sync;
     private const int CacheExpirationMinutes = 5;
     private const int BookCacheExpirationMinutes = 10;
 
-    public BookService(AppDbContext context, IMemoryCache cache, IElasticSearchService elastic)
+    public BookService(AppDbContext context, IMemoryCache cache, IBookSyncService sync)
     {
         _context = context;
         _cache = cache;
-        _elastic = elastic;
+        _sync = sync;
     }
 
     /// <summary>
@@ -115,13 +115,10 @@ public class BookService : IBookService
 
         _context.Books.Add(book);
         await _context.SaveChangesAsync();
-        await _elastic.UpsertBook(book.Id);
+        await _sync.SyncBookAsync(book.Id);
 
         // Load category for DTO mapping
         await _context.Entry(book).Reference(b => b.Category).LoadAsync();
-
-        // Clear cache after modification
-        ClearBooksCache();
 
         return MapToDto(book);
     }
@@ -151,11 +148,7 @@ public class BookService : IBookService
         book.CategoryId = dto.CategoryId;
 
         await _context.SaveChangesAsync();
-        await _elastic.UpsertBook(id);
-
-        // Clear cache after modification
-        _cache.Remove($"book:{id}");
-        ClearBooksCache();
+        await _sync.SyncBookAsync(id);
 
         // Reload with related data
         var updatedBook = await _context
@@ -182,11 +175,7 @@ public class BookService : IBookService
 
         _context.Books.Remove(book);
         await _context.SaveChangesAsync();
-        await _elastic.DeleteBook(id);
-
-        // Clear cache after modification
-        _cache.Remove($"book:{id}");
-        ClearBooksCache();
+        await _sync.RemoveBookAsync(id);
 
         return true;
     }

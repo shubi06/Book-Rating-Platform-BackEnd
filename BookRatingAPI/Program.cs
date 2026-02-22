@@ -90,6 +90,7 @@ builder.Services.AddScoped<IReadingListService, ReadingListService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IElasticSearchService, ElasticSearchService>();
+builder.Services.AddScoped<IBookSyncService, BookSyncService>();
 
 // Configure JWT authentication
 builder
