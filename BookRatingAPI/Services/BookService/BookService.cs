@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.Models;
@@ -165,7 +161,7 @@ public class BookService : IBookService
             .Include(b => b.Ratings)
             .FirstOrDefaultAsync(b => b.Id == id);
 
-        await _elastic.UpsertBook(id, dto);
+        await _elastic.UpsertBook(id);
 
         return updatedBook != null ? MapToDto(updatedBook) : null;
     }
@@ -190,6 +186,7 @@ public class BookService : IBookService
         // Clear cache after modification
         _cache.Remove($"book:{id}");
         ClearBooksCache();
+        await _elastic.DeleteBook(id);
 
         return true;
     }

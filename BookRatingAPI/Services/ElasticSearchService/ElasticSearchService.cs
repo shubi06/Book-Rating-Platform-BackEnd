@@ -225,20 +225,8 @@ namespace BookRatingAPI.Services
             return books;
         }
 
-        public async Task UpsertBook(int id, CreateBookDto book)
+        public async Task UpsertBook(int id)
         {
-            var bookDto = new Book
-            {
-                Id = id,
-                Title = book.Title ?? string.Empty,
-                Author = book.Author ?? string.Empty,
-                Description = book.Description ?? string.Empty,
-                CoverImageUrl = book.CoverImageUrl,
-                PublicationYear = book.PublicationYear ?? 0,
-                ISBN = book.ISBN,
-                CategoryId = book.CategoryId,
-            };
-
             var updatedBook = await _context
                 .Books.Include(b => b.Category)
                 .Include(b => b.Ratings)
