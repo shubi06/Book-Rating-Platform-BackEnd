@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
-using BookRatingAPI.DTOs.BookDTOs;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -16,15 +11,15 @@ public class BookService : IBookService
 {
     private readonly AppDbContext _context;
     private readonly IMemoryCache _cache;
-    private readonly ILogger<BookService> _logger;
+    private readonly IBookSyncService _sync;
     private const int CacheExpirationMinutes = 5;
     private const int BookCacheExpirationMinutes = 10;
 
-    public BookService(AppDbContext context, IMemoryCache cache, ILogger<BookService> logger)
+    public BookService(AppDbContext context, IMemoryCache cache, IBookSyncService sync)
     {
         _context = context;
         _cache = cache;
-        _logger = logger;
+        _sync = sync;
     }
 
     public async Task<List<BookDto>> GetBooksAsync(string? search, int? categoryId)
@@ -42,12 +37,8 @@ public class BookService : IBookService
             return cachedBooks;
         }
 
-        _logger.LogInformation("Cache miss, fetching books from database (CategoryId={CategoryId})", categoryId);
-
-        var query = _context.Books
-            .Include(b => b.Category)
-            .Include(b => b.Ratings)
-            .AsQueryable();
+        // Query database
+        var query = _context.Books.Include(b => b.Category).Include(b => b.Ratings).AsQueryable();
 
         if (categoryId.HasValue)
             query = query.Where(b => b.CategoryId == categoryId);
@@ -65,8 +56,9 @@ public class BookService : IBookService
         if (_cache.TryGetValue(cacheKey, out BookDto? cachedBook) && cachedBook != null)
             return cachedBook;
 
-        var book = await _context.Books
-            .Include(b => b.Category)
+        // Query database
+        var book = await _context
+            .Books.Include(b => b.Category)
             .Include(b => b.Ratings)
             .FirstOrDefaultAsync(b => b.Id == id);
 
@@ -94,10 +86,9 @@ public class BookService : IBookService
 
         _context.Books.Add(book);
         await _context.SaveChangesAsync();
+        await _sync.SyncBookAsync(book.Id);
 
         await _context.Entry(book).Reference(b => b.Category).LoadAsync();
-
-        ClearBooksCache();
 
         return MapToDto(book);
     }
@@ -118,12 +109,11 @@ public class BookService : IBookService
         book.CategoryId = dto.CategoryId;
 
         await _context.SaveChangesAsync();
+        await _sync.SyncBookAsync(id);
 
-        _cache.Remove($"book:{id}");
-        ClearBooksCache();
-
-        var updatedBook = await _context.Books
-            .Include(b => b.Category)
+        // Reload with related data
+        var updatedBook = await _context
+            .Books.Include(b => b.Category)
             .Include(b => b.Ratings)
             .FirstOrDefaultAsync(b => b.Id == id);
 
@@ -139,9 +129,7 @@ public class BookService : IBookService
 
         _context.Books.Remove(book);
         await _context.SaveChangesAsync();
-
-        _cache.Remove($"book:{id}");
-        ClearBooksCache();
+        await _sync.RemoveBookAsync(id);
 
         return true;
     }
@@ -154,13 +142,13 @@ public class BookService : IBookService
 
     private async Task<List<BookDto>> SearchBooksAsync(string search)
     {
-        var books = await _context.Books
-            .Include(b => b.Category)
+        var books = await _context
+            .Books.Include(b => b.Category)
             .Include(b => b.Ratings)
             .Where(b =>
-                EF.Functions.Like(b.Title, $"%{search}%") ||
-                EF.Functions.Like(b.Author, $"%{search}%") ||
-                EF.Functions.Like(b.Description, $"%{search}%")
+                EF.Functions.Like(b.Title, $"%{search}%")
+                || EF.Functions.Like(b.Author, $"%{search}%")
+                || EF.Functions.Like(b.Description, $"%{search}%")
             )
             .ToListAsync();
 
