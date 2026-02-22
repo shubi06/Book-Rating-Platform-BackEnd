@@ -1,69 +1,62 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Services;
 
-/// <summary>
-/// Service for managing book ratings and reviews
-/// </summary>
 public class RatingService : IRatingService
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<RatingService> _logger;
 
-    public RatingService(AppDbContext context)
+    public RatingService(AppDbContext context, ILogger<RatingService> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
-    /// <summary>
-    /// Get all ratings for a specific book
-    /// </summary>
-    /// <param name="bookId">The ID of the book</param>
-    /// <returns>List of ratings with user information</returns>
     public async Task<List<RatingDto>> GetBookRatingsAsync(int bookId)
     {
-        return await _context.Ratings
+        _logger.LogInformation("Fetching ratings for BookId={BookId}", bookId);
+        var ratings = await _context.Ratings
             .Include(r => r.User)
             .Where(r => r.BookId == bookId)
             .Select(r => MapToDto(r))
             .ToListAsync();
+        _logger.LogInformation("Retrieved {Count} ratings for BookId={BookId}", ratings.Count, bookId);
+        return ratings;
     }
 
-    /// <summary>
-    /// Get all ratings created by a specific user
-    /// </summary>
-    /// <param name="userId">The ID of the user</param>
-    /// <returns>List of user's ratings</returns>
     public async Task<List<RatingDto>> GetUserRatingsAsync(int userId)
     {
-        return await _context.Ratings
+        _logger.LogInformation("Fetching ratings for UserId={UserId}", userId);
+        var ratings = await _context.Ratings
             .Include(r => r.User)
             .Include(r => r.Book)
             .Where(r => r.UserId == userId)
             .Select(r => MapToDto(r))
             .ToListAsync();
+        _logger.LogInformation("Retrieved {Count} ratings for UserId={UserId}", ratings.Count, userId);
+        return ratings;
     }
 
-    /// <summary>
-    /// Create a new rating for a book
-    /// </summary>
-    /// <param name="userId">The ID of the user creating the rating</param>
-    /// <param name="dto">Rating creation data</param>
-    /// <returns>The created rating, or null if user already rated this book</returns>
     public async Task<RatingDto?> CreateRatingAsync(int userId, CreateRatingDto dto)
     {
-        // Check if user already rated this book
+        _logger.LogInformation("Creating rating for BookId={BookId} by UserId={UserId}", dto.BookId, userId);
+        
         var existing = await _context.Ratings
             .FirstOrDefaultAsync(r => r.UserId == userId && r.BookId == dto.BookId);
 
         if (existing != null)
+        {
+            _logger.LogWarning("User already rated this book: UserId={UserId}, BookId={BookId}", userId, dto.BookId);
             return null;
+        }
 
         var rating = new Rating
         {
@@ -76,66 +69,56 @@ public class RatingService : IRatingService
         _context.Ratings.Add(rating);
         await _context.SaveChangesAsync();
 
-        // Load user information for DTO mapping
         var user = await _context.Users.FindAsync(userId);
         rating.User = user!;
 
+        _logger.LogInformation("Rating created successfully: RatingId={RatingId}", rating.Id);
         return MapToDto(rating);
     }
 
-    /// <summary>
-    /// Update an existing rating
-    /// </summary>
-    /// <param name="id">The ID of the rating to update</param>
-    /// <param name="userId">The ID of the user (for authorization)</param>
-    /// <param name="dto">Updated rating data</param>
-    /// <returns>The updated rating, or null if not found or unauthorized</returns>
     public async Task<RatingDto?> UpdateRatingAsync(int id, int userId, CreateRatingDto dto)
     {
+        _logger.LogInformation("Updating rating: RatingId={RatingId} by UserId={UserId}", id, userId);
+        
         var rating = await _context.Ratings.FindAsync(id);
 
-        // Verify rating exists and belongs to the user
         if (rating == null || rating.UserId != userId)
+        {
+            _logger.LogWarning("Rating not found or unauthorized: RatingId={RatingId}, UserId={UserId}", id, userId);
             return null;
+        }
 
         rating.Score = dto.Score;
         rating.Comment = dto.Comment;
-        rating.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 
-        // Load user information for DTO mapping
         var user = await _context.Users.FindAsync(userId);
         rating.User = user!;
 
+        _logger.LogInformation("Rating updated successfully: RatingId={RatingId}", id);
         return MapToDto(rating);
     }
 
-    /// <summary>
-    /// Delete a rating
-    /// </summary>
-    /// <param name="id">The ID of the rating to delete</param>
-    /// <param name="userId">The ID of the user (for authorization)</param>
-    /// <returns>True if deleted successfully, false if not found or unauthorized</returns>
     public async Task<bool> DeleteRatingAsync(int id, int userId)
     {
+        _logger.LogInformation("Deleting rating: RatingId={RatingId} by UserId={UserId}", id, userId);
+        
         var rating = await _context.Ratings.FindAsync(id);
 
-        // Verify rating exists and belongs to the user
         if (rating == null || rating.UserId != userId)
+        {
+            _logger.LogWarning("Rating not found or unauthorized: RatingId={RatingId}, UserId={UserId}", id, userId);
             return false;
+        }
 
         _context.Ratings.Remove(rating);
         await _context.SaveChangesAsync();
 
+        _logger.LogInformation("Rating deleted successfully: RatingId={RatingId}", id);
         return true;
     }
 
-    /// <summary>
-    /// Maps a Rating entity to a RatingDto
-    /// </summary>
-    /// <param name="rating">The rating entity</param>
-    /// <returns>The mapped DTO</returns>
     private static RatingDto MapToDto(Rating rating)
     {
         return new RatingDto

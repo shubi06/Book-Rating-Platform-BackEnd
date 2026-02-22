@@ -5,6 +5,7 @@ using BookRatingAPI.DTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Controllers;
 
@@ -17,10 +18,12 @@ namespace BookRatingAPI.Controllers;
 public class RatingsController : ControllerBase
 {
     private readonly IRatingService _ratingService;
+    private readonly ILogger<RatingsController> _logger;
 
-    public RatingsController(IRatingService ratingService)
+    public RatingsController(IRatingService ratingService, ILogger<RatingsController> logger)
     {
         _ratingService = ratingService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -32,7 +35,9 @@ public class RatingsController : ControllerBase
     [HttpGet("book/{bookId}")]
     public async Task<ActionResult<IEnumerable<RatingDto>>> GetBookRatings(int bookId)
     {
+        _logger.LogInformation("Fetching ratings for BookId={BookId}", bookId);
         var ratings = await _ratingService.GetBookRatingsAsync(bookId);
+        _logger.LogInformation("Retrieved {Count} ratings for BookId={BookId}", ratings.Count, bookId);
         return Ok(ratings);
     }
 
@@ -44,7 +49,9 @@ public class RatingsController : ControllerBase
     public async Task<ActionResult<IEnumerable<RatingDto>>> GetMyRatings()
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        _logger.LogInformation("Fetching ratings for UserId={UserId}", userId);
         var ratings = await _ratingService.GetUserRatingsAsync(userId);
+        _logger.LogInformation("Retrieved {Count} ratings for UserId={UserId}", ratings.Count, userId);
         return Ok(ratings);
     }
 
@@ -56,12 +63,24 @@ public class RatingsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<RatingDto>> CreateRating(CreateRatingDto dto)
     {
+        if (!ModelState.IsValid)
+        {
+            _logger.LogWarning("Invalid model state for rating creation");
+            return BadRequest(ModelState);
+        }
+
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        _logger.LogInformation("Creating rating for BookId={BookId} by UserId={UserId}", dto.BookId, userId);
+        
         var rating = await _ratingService.CreateRatingAsync(userId, dto);
 
         if (rating == null)
-            return BadRequest("You have already rated this book");
+        {
+            _logger.LogWarning("Failed to create rating: User already rated BookId={BookId}", dto.BookId);
+            return BadRequest(new { Message = "You have already rated this book" });
+        }
 
+        _logger.LogInformation("Rating created successfully: RatingId={RatingId}", rating.Id);
         return Ok(rating);
     }
 
@@ -74,12 +93,24 @@ public class RatingsController : ControllerBase
     [HttpPut("{id}")]
     public async Task<ActionResult<RatingDto>> UpdateRating(int id, CreateRatingDto dto)
     {
+        if (!ModelState.IsValid)
+        {
+            _logger.LogWarning("Invalid model state for rating update: RatingId={RatingId}", id);
+            return BadRequest(ModelState);
+        }
+
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        _logger.LogInformation("Updating rating: RatingId={RatingId} by UserId={UserId}", id, userId);
+        
         var rating = await _ratingService.UpdateRatingAsync(id, userId, dto);
 
         if (rating == null)
-            return NotFound();
+        {
+            _logger.LogWarning("Rating not found or unauthorized: RatingId={RatingId}, UserId={UserId}", id, userId);
+            return NotFound(new { Message = "Rating not found or you don't have permission to update it" });
+        }
 
+        _logger.LogInformation("Rating updated successfully: RatingId={RatingId}", id);
         return Ok(rating);
     }
 
@@ -92,11 +123,17 @@ public class RatingsController : ControllerBase
     public async Task<IActionResult> DeleteRating(int id)
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        _logger.LogInformation("Deleting rating: RatingId={RatingId} by UserId={UserId}", id, userId);
+        
         var deleted = await _ratingService.DeleteRatingAsync(id, userId);
 
         if (!deleted)
-            return NotFound();
+        {
+            _logger.LogWarning("Rating not found or unauthorized: RatingId={RatingId}, UserId={UserId}", id, userId);
+            return NotFound(new { Message = "Rating not found or you don't have permission to delete it" });
+        }
 
+        _logger.LogInformation("Rating deleted successfully: RatingId={RatingId}", id);
         return NoContent();
     }
 }

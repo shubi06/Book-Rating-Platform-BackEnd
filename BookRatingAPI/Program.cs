@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using BookRatingAPI.Data;
+using BookRatingAPI.Middleware;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
@@ -106,9 +107,20 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Add Health Checks
+builder.Services.AddHealthChecks();
+
 var app = builder.Build();
 
+
 // Configure the HTTP request pipeline
+
+// Global exception handler (must be first)
+app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
+
+// Request logging
+app.UseMiddleware<RequestLoggingMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -123,5 +135,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();

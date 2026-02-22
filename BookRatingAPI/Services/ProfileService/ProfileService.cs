@@ -1,6 +1,7 @@
-﻿using System.Linq;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.DTOs.ProfileDTOs;
@@ -10,22 +11,30 @@ namespace BookRatingAPI.Services;
 public class ProfileService : IProfileService
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<ProfileService> _logger;
 
-    public ProfileService(AppDbContext context)
+    public ProfileService(AppDbContext context, ILogger<ProfileService> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
     public async Task<ProfileDto?> GetMyProfileAsync(int userId)
     {
+        _logger.LogInformation("Fetching profile for UserId={UserId}", userId);
+        
         var user = await _context.Users
             .Include(u => u.Ratings)
             .Include(u => u.ReadingLists)
             .FirstOrDefaultAsync(u => u.Id == userId);
 
         if (user == null)
+        {
+            _logger.LogWarning("User not found: UserId={UserId}", userId);
             return null;
+        }
 
+        _logger.LogInformation("Profile retrieved successfully for UserId={UserId}", userId);
         return new ProfileDto
         {
             Id = user.Id,
@@ -43,14 +52,20 @@ public class ProfileService : IProfileService
 
     public async Task<PublicProfileDto?> GetUserProfileAsync(int userId)
     {
+        _logger.LogInformation("Fetching public profile for UserId={UserId}", userId);
+        
         var user = await _context.Users
             .Include(u => u.Ratings)
             .ThenInclude(r => r.Book)
             .FirstOrDefaultAsync(u => u.Id == userId);
 
         if (user == null)
+        {
+            _logger.LogWarning("User not found for public profile: UserId={UserId}", userId);
             return null;
+        }
 
+        _logger.LogInformation("Public profile retrieved successfully for UserId={UserId}", userId);
         return new PublicProfileDto
         {
             Id = user.Id,
@@ -60,7 +75,7 @@ public class ProfileService : IProfileService
             {
                 TotalRatings = user.Ratings.Count,
                 AverageRating = user.Ratings.Any() ? user.Ratings.Average(r => r.Score) : 0,
-                BooksInReadingList = 0 // Don't expose reading list count publicly
+                BooksInReadingList = 0
             },
             RecentRatings = user.Ratings
                 .OrderByDescending(r => r.CreatedAt)

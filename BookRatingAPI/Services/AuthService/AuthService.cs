@@ -3,43 +3,39 @@ using BookRatingAPI.Data;
 using BookRatingAPI.DTOs.AuthDTOs;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Services;
 
-/// <summary>
-/// Service for handling user authentication and registration
-/// </summary>
 public class AuthService : IAuthService
 {
     private readonly AppDbContext _context;
     private readonly ITokenService _tokenService;
+    private readonly ILogger<AuthService> _logger;
 
-    public AuthService(AppDbContext context, ITokenService tokenService)
+    public AuthService(AppDbContext context, ITokenService tokenService, ILogger<AuthService> logger)
     {
         _context = context;
         _tokenService = tokenService;
+        _logger = logger;
     }
 
-    /// <summary>
-    /// Register a new user
-    /// </summary>
-    /// <param name="dto">Registration data</param>
-    /// <returns>Authentication response with token and user data, or null if email/username exists</returns>
     public async Task<AuthResponseDto?> RegisterAsync(RegisterDto dto)
     {
-        // Check if email already exists
+        _logger.LogInformation("Starting user registration for email: {Email}", dto.Email);
+
         if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
         {
+            _logger.LogWarning("Registration failed: Email already exists - {Email}", dto.Email);
             return null;
         }
 
-        // Check if username already exists
         if (await _context.Users.AnyAsync(u => u.Username == dto.Username))
         {
+            _logger.LogWarning("Registration failed: Username already exists - {Username}", dto.Username);
             return null;
         }
 
-        // Create new user with hashed password
         var user = new User
         {
             Username = dto.Username,
@@ -50,7 +46,8 @@ public class AuthService : IAuthService
         _context.Users.Add(user);
         await _context.SaveChangesAsync();
 
-        // Generate JWT token
+        _logger.LogInformation("User created successfully: UserId={UserId}, Username={Username}", user.Id, user.Username);
+
         var token = _tokenService.GenerateToken(user);
 
         return new AuthResponseDto
@@ -66,23 +63,26 @@ public class AuthService : IAuthService
         };
     }
 
-    /// <summary>
-    /// Authenticate a user
-    /// </summary>
-    /// <param name="dto">Login credentials</param>
-    /// <returns>Authentication response with token and user data, or null if credentials are invalid</returns>
     public async Task<AuthResponseDto?> LoginAsync(LoginDto dto)
     {
-        // Find user by email
+        _logger.LogInformation("Login attempt for email: {Email}", dto.Email);
+
         var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
 
-        // Verify user exists and password is correct
-        if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+        if (user == null)
         {
+            _logger.LogWarning("Login failed: User not found for email {Email}", dto.Email);
             return null;
         }
 
-        // Generate JWT token
+        if (!BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+        {
+            _logger.LogWarning("Login failed: Invalid password for email {Email}", dto.Email);
+            return null;
+        }
+
+        _logger.LogInformation("User authenticated successfully: UserId={UserId}, Username={Username}", user.Id, user.Username);
+
         var token = _tokenService.GenerateToken(user);
 
         return new AuthResponseDto

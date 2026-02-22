@@ -5,6 +5,7 @@ using BookRatingAPI.DTOs.ProfileDTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Controllers;
 
@@ -17,10 +18,12 @@ namespace BookRatingAPI.Controllers;
 public class ProfileController : ControllerBase
 {
     private readonly IProfileService _profileService;
+    private readonly ILogger<ProfileController> _logger;
 
-    public ProfileController(IProfileService profileService)
+    public ProfileController(IProfileService profileService, ILogger<ProfileController> logger)
     {
         _profileService = profileService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -31,10 +34,15 @@ public class ProfileController : ControllerBase
     public async Task<ActionResult<ProfileDto>> GetMyProfile()
     {
         var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        _logger.LogInformation("Fetching profile for UserId={UserId}", userId);
+        
         var profile = await _profileService.GetMyProfileAsync(userId);
 
         if (profile == null)
-            return NotFound();
+        {
+            _logger.LogWarning("Profile not found for UserId={UserId}", userId);
+            return NotFound(new { Message = "Profile not found" });
+        }
 
         return Ok(profile);
     }
@@ -48,10 +56,15 @@ public class ProfileController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<PublicProfileDto>> GetUserProfile(int userId)
     {
+        _logger.LogInformation("Fetching public profile for UserId={UserId}", userId);
+        
         var profile = await _profileService.GetUserProfileAsync(userId);
 
         if (profile == null)
-            return NotFound();
+        {
+            _logger.LogWarning("Public profile not found for UserId={UserId}", userId);
+            return NotFound(new { Message = "Profile not found" });
+        }
 
         return Ok(profile);
     }
