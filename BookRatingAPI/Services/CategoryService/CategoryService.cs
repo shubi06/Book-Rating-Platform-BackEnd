@@ -5,86 +5,83 @@ using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Services;
 
-/// <summary>
-/// Service for managing book categories
-/// </summary>
 public class CategoryService : ICategoryService
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<CategoryService> _logger;
 
-    public CategoryService(AppDbContext context)
+    public CategoryService(AppDbContext context, ILogger<CategoryService> logger)
     {
         _context = context;
+        _logger = logger;
     }
 
-    /// <summary>
-    /// Get all categories
-    /// </summary>
-    /// <returns>List of all categories</returns>
     public async Task<List<CategoryDto>> GetAllCategoriesAsync()
     {
-        return await _context.Categories
+        _logger.LogInformation("Fetching all categories");
+        var categories = await _context.Categories
             .Select(c => new CategoryDto { Id = c.Id, Name = c.Name })
             .ToListAsync();
+        _logger.LogInformation("Retrieved {Count} categories", categories.Count);
+        return categories;
     }
 
-    /// <summary>
-    /// Create a new category
-    /// </summary>
-    /// <param name="dto">Category creation data</param>
-    /// <returns>The created category</returns>
     public async Task<CategoryDto> CreateCategoryAsync(CreateCategoryDto dto)
     {
+        _logger.LogInformation("Creating category: Name={Name}", dto.Name);
         var category = new Category { Name = dto.Name };
         
         _context.Categories.Add(category);
         await _context.SaveChangesAsync();
         
+        _logger.LogInformation("Category created successfully: Id={CategoryId}", category.Id);
         return new CategoryDto { Id = category.Id, Name = category.Name };
     }
 
-    /// <summary>
-    /// Update an existing category
-    /// </summary>
-    /// <param name="id">The ID of the category to update</param>
-    /// <param name="dto">Updated category data</param>
-    /// <returns>The updated category, or null if not found</returns>
     public async Task<CategoryDto?> UpdateCategoryAsync(int id, CreateCategoryDto dto)
     {
+        _logger.LogInformation("Updating category: Id={CategoryId}", id);
         var existing = await _context.Categories.FindAsync(id);
 
         if (existing == null)
+        {
+            _logger.LogWarning("Category not found: Id={CategoryId}", id);
             return null;
+        }
 
         existing.Name = dto.Name;
         await _context.SaveChangesAsync();
 
+        _logger.LogInformation("Category updated successfully: Id={CategoryId}", id);
         return new CategoryDto { Id = existing.Id, Name = existing.Name };
     }
 
-    /// <summary>
-    /// Delete a category
-    /// </summary>
-    /// <param name="id">The ID of the category to delete</param>
-    /// <returns>True if deleted successfully, false if not found or has books</returns>
     public async Task<bool> DeleteCategoryAsync(int id)
     {
+        _logger.LogInformation("Deleting category: Id={CategoryId}", id);
         var category = await _context.Categories.FindAsync(id);
 
         if (category == null)
+        {
+            _logger.LogWarning("Category not found: Id={CategoryId}", id);
             return false;
+        }
 
-        // Check if category has books
         var hasBooks = await _context.Books.AnyAsync(b => b.CategoryId == id);
         if (hasBooks)
+        {
+            _logger.LogWarning("Cannot delete category with books: Id={CategoryId}", id);
             return false;
+        }
 
         _context.Categories.Remove(category);
         await _context.SaveChangesAsync();
         
+        _logger.LogInformation("Category deleted successfully: Id={CategoryId}", id);
         return true;
     }
 }

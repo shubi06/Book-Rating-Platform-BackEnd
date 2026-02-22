@@ -4,6 +4,7 @@ using BookRatingAPI.DTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Controllers;
 
@@ -16,10 +17,12 @@ namespace BookRatingAPI.Controllers;
 public class CategoriesController : ControllerBase
 {
     private readonly ICategoryService _categoryService;
+    private readonly ILogger<CategoriesController> _logger;
 
-    public CategoriesController(ICategoryService categoryService)
+    public CategoriesController(ICategoryService categoryService, ILogger<CategoriesController> logger)
     {
         _categoryService = categoryService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -30,7 +33,9 @@ public class CategoriesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories()
     {
+        _logger.LogInformation("Fetching all categories");
         var categories = await _categoryService.GetAllCategoriesAsync();
+        _logger.LogInformation("Retrieved {Count} categories", categories.Count);
         return Ok(categories);
     }
 
@@ -42,7 +47,15 @@ public class CategoriesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<CategoryDto>> CreateCategory(CreateCategoryDto dto)
     {
+        if (!ModelState.IsValid)
+        {
+            _logger.LogWarning("Invalid model state for category creation");
+            return BadRequest(ModelState);
+        }
+
+        _logger.LogInformation("Creating category: Name={Name}", dto.Name);
         var created = await _categoryService.CreateCategoryAsync(dto);
+        _logger.LogInformation("Category created successfully: Id={CategoryId}", created.Id);
         return CreatedAtAction(nameof(GetCategories), new { id = created.Id }, created);
     }
 
@@ -55,11 +68,22 @@ public class CategoriesController : ControllerBase
     [HttpPut("{id}")]
     public async Task<ActionResult<CategoryDto>> UpdateCategory(int id, CreateCategoryDto dto)
     {
+        if (!ModelState.IsValid)
+        {
+            _logger.LogWarning("Invalid model state for category update: Id={CategoryId}", id);
+            return BadRequest(ModelState);
+        }
+
+        _logger.LogInformation("Updating category: Id={CategoryId}", id);
         var updated = await _categoryService.UpdateCategoryAsync(id, dto);
 
         if (updated == null)
-            return NotFound();
+        {
+            _logger.LogWarning("Category not found: Id={CategoryId}", id);
+            return NotFound(new { Message = "Category not found" });
+        }
 
+        _logger.LogInformation("Category updated successfully: Id={CategoryId}", id);
         return Ok(updated);
     }
 
@@ -71,11 +95,16 @@ public class CategoriesController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteCategory(int id)
     {
+        _logger.LogInformation("Deleting category: Id={CategoryId}", id);
         var deleted = await _categoryService.DeleteCategoryAsync(id);
 
         if (!deleted)
-            return BadRequest("Category not found or has books");
+        {
+            _logger.LogWarning("Category not found or has books: Id={CategoryId}", id);
+            return BadRequest(new { Message = "Category not found or has books" });
+        }
 
+        _logger.LogInformation("Category deleted successfully: Id={CategoryId}", id);
         return NoContent();
     }
 }

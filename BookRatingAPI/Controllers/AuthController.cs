@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using BookRatingAPI.DTOs.AuthDTOs;
 using BookRatingAPI.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Controllers;
 
@@ -13,10 +14,12 @@ namespace BookRatingAPI.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, ILogger<AuthController> logger)
     {
         _authService = authService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -27,11 +30,23 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponseDto>> Register(RegisterDto dto)
     {
+        if (!ModelState.IsValid)
+        {
+            _logger.LogWarning("Registration failed: Invalid model state for email {Email}", dto.Email);
+            return BadRequest(ModelState);
+        }
+
+        _logger.LogInformation("Registration attempt for email: {Email}", dto.Email);
+
         var result = await _authService.RegisterAsync(dto);
 
         if (result == null)
-            return BadRequest("Email or username already exists");
+        {
+            _logger.LogWarning("Registration failed: Email or username already exists for {Email}", dto.Email);
+            return BadRequest(new { Message = "Email or username already exists" });
+        }
 
+        _logger.LogInformation("User registered successfully: {Username}", result.User.Username);
         return Ok(result);
     }
 
@@ -43,11 +58,23 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto dto)
     {
+        if (!ModelState.IsValid)
+        {
+            _logger.LogWarning("Login failed: Invalid model state");
+            return BadRequest(ModelState);
+        }
+
+        _logger.LogInformation("Login attempt for email: {Email}", dto.Email);
+
         var result = await _authService.LoginAsync(dto);
 
         if (result == null)
-            return Unauthorized("Invalid credentials");
+        {
+            _logger.LogWarning("Login failed: Invalid credentials for email {Email}", dto.Email);
+            return Unauthorized(new { Message = "Invalid credentials" });
+        }
 
+        _logger.LogInformation("User logged in successfully: {Username}", result.User.Username);
         return Ok(result);
     }
 }
