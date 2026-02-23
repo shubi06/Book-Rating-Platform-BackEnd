@@ -1,3 +1,7 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.Models;
@@ -11,14 +15,16 @@ public class BookService : IBookService
 {
     private readonly AppDbContext _context;
     private readonly IMemoryCache _cache;
+    private readonly ILogger<BookService> _logger;
     private readonly IBookSyncService _sync;
     private const int CacheExpirationMinutes = 5;
     private const int BookCacheExpirationMinutes = 10;
 
-    public BookService(AppDbContext context, IMemoryCache cache, IBookSyncService sync)
+    public BookService(AppDbContext context, IMemoryCache cache, ILogger<BookService> logger, IBookSyncService sync)
     {
         _context = context;
         _cache = cache;
+        _logger = logger;
         _sync = sync;
     }
 
@@ -90,6 +96,8 @@ public class BookService : IBookService
 
         await _context.Entry(book).Reference(b => b.Category).LoadAsync();
 
+        ClearBooksCache();
+
         return MapToDto(book);
     }
 
@@ -111,9 +119,11 @@ public class BookService : IBookService
         await _context.SaveChangesAsync();
         await _sync.SyncBookAsync(id);
 
-        // Reload with related data
-        var updatedBook = await _context
-            .Books.Include(b => b.Category)
+        _cache.Remove($"book:{id}");
+        ClearBooksCache();
+
+        var updatedBook = await _context.Books
+            .Include(b => b.Category)
             .Include(b => b.Ratings)
             .FirstOrDefaultAsync(b => b.Id == id);
 
@@ -130,6 +140,9 @@ public class BookService : IBookService
         _context.Books.Remove(book);
         await _context.SaveChangesAsync();
         await _sync.RemoveBookAsync(id);
+
+        _cache.Remove($"book:{id}");
+        ClearBooksCache();
 
         return true;
     }

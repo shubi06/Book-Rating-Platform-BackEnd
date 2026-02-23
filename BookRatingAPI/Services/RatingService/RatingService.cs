@@ -1,4 +1,7 @@
-﻿using BookRatingAPI.Data;
+﻿using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.Models;
 using Microsoft.EntityFrameworkCore;
@@ -9,18 +12,21 @@ namespace BookRatingAPI.Services;
 public class RatingService : IRatingService
 {
     private readonly AppDbContext _context;
+    private readonly ILogger<RatingService> _logger;
     private readonly IBookSyncService _sync;
 
-    public RatingService(AppDbContext context, IBookSyncService sync)
+    public RatingService(AppDbContext context, ILogger<RatingService> logger, IBookSyncService sync)
     {
         _context = context;
+        _logger = logger;
         _sync = sync;
     }
 
     public async Task<List<RatingDto>> GetBookRatingsAsync(int bookId)
     {
-        return await _context
-            .Ratings.Include(r => r.User)
+        _logger.LogInformation("Fetching ratings for BookId={BookId}", bookId);
+        var ratings = await _context.Ratings
+            .Include(r => r.User)
             .Where(r => r.BookId == bookId)
             .Select(r => MapToDto(r))
             .ToListAsync();
@@ -30,8 +36,9 @@ public class RatingService : IRatingService
 
     public async Task<List<RatingDto>> GetUserRatingsAsync(int userId)
     {
-        return await _context
-            .Ratings.Include(r => r.User)
+        _logger.LogInformation("Fetching ratings for UserId={UserId}", userId);
+        var ratings = await _context.Ratings
+            .Include(r => r.User)
             .Include(r => r.Book)
             .Where(r => r.UserId == userId)
             .Select(r => MapToDto(r))
@@ -42,10 +49,10 @@ public class RatingService : IRatingService
 
     public async Task<RatingDto?> CreateRatingAsync(int userId, CreateRatingDto dto)
     {
-        // Check if user already rated this book
-        var existing = await _context.Ratings.FirstOrDefaultAsync(r =>
-            r.UserId == userId && r.BookId == dto.BookId
-        );
+        _logger.LogInformation("Creating rating for BookId={BookId} by UserId={UserId}", dto.BookId, userId);
+        
+        var existing = await _context.Ratings
+            .FirstOrDefaultAsync(r => r.UserId == userId && r.BookId == dto.BookId);
 
         if (existing != null)
         {
@@ -58,7 +65,7 @@ public class RatingService : IRatingService
             UserId = userId,
             BookId = dto.BookId,
             Score = dto.Score,
-            Comment = dto.Comment,
+            Comment = dto.Comment
         };
 
         _context.Ratings.Add(rating);

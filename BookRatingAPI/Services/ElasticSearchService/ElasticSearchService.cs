@@ -76,18 +76,18 @@ namespace BookRatingAPI.Services
 
         public async Task<List<BookDto>> GetBooksElastic(string? title, string? author)
         {
-            var mustQueries = new List<Func<QueryContainerDescriptor<BookDto>, QueryContainer>>();
+            var shouldQueries = new List<Func<QueryContainerDescriptor<BookDto>, QueryContainer>>();
 
             if (!string.IsNullOrWhiteSpace(title))
             {
-                mustQueries.Add(q =>
+                shouldQueries.Add(q =>
                     q.Fuzzy(fz => fz.Field(f => f.Title).Value(title).Fuzziness(Fuzziness.Auto))
                 );
             }
 
             if (!string.IsNullOrWhiteSpace(author))
             {
-                mustQueries.Add(q =>
+                shouldQueries.Add(q =>
                     q.Fuzzy(fz => fz.Field(f => f.Author).Value(author).Fuzziness(Fuzziness.Auto))
                 );
             }
@@ -96,8 +96,8 @@ namespace BookRatingAPI.Services
             {
                 s.Index("books").Size(10000);
 
-                if (mustQueries.Any())
-                    s.Query(q => q.Bool(b => b.Must(mustQueries)));
+                if (shouldQueries.Any())
+                    s.Query(q => q.Bool(b => b.Should(shouldQueries).MinimumShouldMatch(1)));
                 else
                     s.Query(q => q.MatchAll());
 
@@ -154,17 +154,21 @@ namespace BookRatingAPI.Services
                     .Query(q =>
                     {
                         if (string.IsNullOrWhiteSpace(category))
+                        {
                             _logger.LogInformation("Category Field Empty!");
+                            return q.MatchAll();
+                        }
 
-                        return q.Bool(b =>
-                            b.Must(q => q.Term(t => t.Field(f => f.CategoryName).Value(category)))
+                        return q.Match(m => m
+                            .Field(f => f.CategoryName)
+                            .Query(category)
                         );
                     })
             );
 
             var books = searchResponse.Documents.ToList();
             if (!books.Any())
-                _logger.LogInformation("Books Empty");
+                _logger.LogInformation("No books found for category: {Category}", category);
 
             return books;
         }
