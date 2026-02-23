@@ -11,5 +11,6 @@ namespace BookRatingAPI.DTOs
 		public int Score { get; set; }
 		public string? Comment { get; set; }
 		public DateTime CreatedAt { get; set; }
+		public string BookTitle { get; set; }
 	}
 }
