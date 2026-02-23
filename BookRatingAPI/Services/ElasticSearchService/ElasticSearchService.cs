@@ -25,6 +25,25 @@ namespace BookRatingAPI.Services
 
         public async Task Migrate()
         {
+            var indexName = "books";
+
+            var exists = await _elastic.Indices.ExistsAsync(indexName);
+
+            if (!exists.Exists)
+            {
+                var createResponse = await _elastic.Indices.CreateAsync(
+                    indexName,
+                    c => c.Map<BookDto>(m => m.AutoMap())
+                );
+
+                if (!createResponse.IsValid)
+                {
+                    throw new Exception(createResponse.DebugInformation);
+                }
+
+                _logger.LogInformation("Created Elasticsearch index {Index}", indexName);
+            }
+
             const int batchSize = 500;
             int totalMigrated = 0;
 
@@ -159,10 +178,7 @@ namespace BookRatingAPI.Services
                             return q.MatchAll();
                         }
 
-                        return q.Match(m => m
-                            .Field(f => f.CategoryName)
-                            .Query(category)
-                        );
+                        return q.Match(m => m.Field(f => f.CategoryName).Query(category));
                     })
             );
 
