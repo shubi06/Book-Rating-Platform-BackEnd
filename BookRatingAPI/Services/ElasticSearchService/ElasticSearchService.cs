@@ -150,7 +150,7 @@ namespace BookRatingAPI.Services
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
                 s.Index("books")
-                    .Size(10)
+                    .Size(8)
                     .Query(q => q.MatchAll())
                     .Sort(s =>
                         s.Field(f => f.AverageRating, SortOrder.Descending)
@@ -234,7 +234,7 @@ namespace BookRatingAPI.Services
         public async Task<List<BookDto>> Sort(string sortBy, string sortOrder)
         {
             var searchResponse = await _elastic.SearchAsync<BookDto>(s =>
-                s.Index("books").Query(q => q.MatchAll()).Sort(GetSort(sortBy, sortOrder))
+                s.Index("books").Size(10000).Query(q => q.MatchAll()).Sort(GetSort(sortBy, sortOrder))
             );
 
             var books = searchResponse.Documents.ToList();
