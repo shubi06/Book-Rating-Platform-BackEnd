@@ -1,0 +1,44 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: |
+        dotnet restore BookRatingAPI/BookRatingAPI.csproj
+        dotnet restore BookRatingAPI.Tests/BookRatingAPI.Tests.csproj
+    
+    - name: Build
+      run: |
+        dotnet build BookRatingAPI/BookRatingAPI.csproj --no-restore
+        dotnet build BookRatingAPI.Tests/BookRatingAPI.Tests.csproj --no-restore
+    
+    - name: Run tests
+      run: dotnet test BookRatingAPI.Tests/BookRatingAPI.Tests.csproj --no-restore --verbosity normal --collect:"XPlat Code Coverage"
+    
+    - name: Code Coverage Report
+      run: |
+        dotnet tool install --global dotnet-reportgenerator-globaltool
+        reportgenerator -reports:"BookRatingAPI.Tests/TestResults/*/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:"Html;TextSummary"
+        cat coveragereport/Summary.txt
+    
+    - name: Upload coverage reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coveragereport/
