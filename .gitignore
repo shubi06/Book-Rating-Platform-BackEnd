@@ -174,3 +174,15 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .DS_Store
+
+# Azure Kubernetes Secrets
+.azure/manifests/secrets.yaml
+.azure/manifests/*-secrets.yaml
+*.secret.yaml
+
+# Local environment files with real credentials
+.env.production.local
+.env.local
+*.local.env
+
+*.azure/manifests/secrets-example.yaml

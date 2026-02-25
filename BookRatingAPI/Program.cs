@@ -120,7 +120,13 @@ builder.Services.AddCors(options =>
         policy =>
         {
             policy
-                .WithOrigins("http://localhost:3000")
+                .WithOrigins(
+                    "http://localhost:3000",      // Local development
+                    "http://localhost:5173",      // Vite default port
+                    "http://localhost:4200"       // Angular default port
+                    // Shto frontend production URL këtu kur e deploy:
+                    // "https://yourfrontend.com"
+                )
                 .AllowAnyHeader()
                 .AllowAnyMethod()
                 .AllowCredentials();
@@ -133,10 +139,33 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
+// Run database migrations
+try
 {
-    var elastic = scope.ServiceProvider.GetRequiredService<IElasticSearchService>();
-    await elastic.ReindexAllBooks();
+    using (var scope = app.Services.CreateScope())
+    {
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await dbContext.Database.MigrateAsync();
+        Console.WriteLine("Database migrations applied successfully.");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Warning: Failed to apply database migrations: {ex.Message}");
+}
+
+// Try to reindex Elasticsearch books, but don't crash if Elasticsearch is unavailable
+try
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var elastic = scope.ServiceProvider.GetRequiredService<IElasticSearchService>();
+        await elastic.ReindexAllBooks();
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"Warning: Failed to reindex Elasticsearch books: {ex.Message}");
 }
 
 // Configure the HTTP request pipeline
@@ -147,13 +176,12 @@ app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
 // Request logging
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Enable Swagger in all environments for testing
+app.UseSwagger();
+app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+// Don't redirect to HTTPS in production (using HTTP LoadBalancer)
+// app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
 
