@@ -283,6 +283,20 @@ namespace BookRatingAPI.Services
                 _logger.LogInformation("Deleted Book {Id} successfully", bookId);
         }
 
+        public async Task ReindexAllBooks()
+        {
+            var indexName = "books";
+
+            // Delete existing index
+            var deleteResponse = await _elastic.Indices.DeleteAsync(indexName);
+            if (deleteResponse.IsValid)
+                _logger.LogInformation("Deleted existing Elasticsearch index {Index}", indexName);
+
+            // Recreate and migrate
+            await Migrate();
+        }
+
+
         private static BookDto MapToDto(Book book)
         {
             return new BookDto

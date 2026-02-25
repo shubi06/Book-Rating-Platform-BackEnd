@@ -136,7 +136,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var elastic = scope.ServiceProvider.GetRequiredService<IElasticSearchService>();
-    await elastic.Migrate();
+    await elastic.ReindexAllBooks();
 }
 
 // Configure the HTTP request pipeline

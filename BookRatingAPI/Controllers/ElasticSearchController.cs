@@ -76,5 +76,13 @@ namespace BookRatingAPI.Controllers
             var books = await _elastic.Sort(sortBy, sortOrder);
             return Ok(books);
         }
+
+        [HttpPost("Reindex")]
+        public async Task<IActionResult> ReindexAllBooks()
+        {
+            await _elastic.ReindexAllBooks();
+            return Ok(new { Message = "Reindexing completed successfully" });
+        }
+
     }
 }

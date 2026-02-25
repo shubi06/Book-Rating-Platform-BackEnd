@@ -13,5 +13,6 @@ namespace BookRatingAPI.Services
         Task<List<BookDto>> Sort(string sortBy, string sortOrder);
         Task UpsertBook(int id);
         Task DeleteBook(int bookId);
+        Task ReindexAllBooks();
     }
 }
