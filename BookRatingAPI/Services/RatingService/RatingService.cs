@@ -27,11 +27,13 @@ public class RatingService : IRatingService
         _logger.LogInformation("Fetching ratings for BookId={BookId}", bookId);
         var ratings = await _context.Ratings
             .Include(r => r.User)
+            .Include(r => r.Book)
             .Where(r => r.BookId == bookId)
-            .Select(r => MapToDto(r))
             .ToListAsync();
-        _logger.LogInformation("Retrieved {Count} ratings for BookId={BookId}", ratings.Count, bookId);
-        return ratings;
+        
+        var result = ratings.Select(r => MapToDto(r)).ToList();
+        _logger.LogInformation("Retrieved {Count} ratings for BookId={BookId}", result.Count, bookId);
+        return result;
     }
 
     public async Task<List<RatingDto>> GetUserRatingsAsync(int userId)
@@ -41,10 +43,11 @@ public class RatingService : IRatingService
             .Include(r => r.User)
             .Include(r => r.Book)
             .Where(r => r.UserId == userId)
-            .Select(r => MapToDto(r))
             .ToListAsync();
-        _logger.LogInformation("Retrieved {Count} ratings for UserId={UserId}", ratings.Count, userId);
-        return ratings;
+        
+        var result = ratings.Select(r => MapToDto(r)).ToList();
+        _logger.LogInformation("Retrieved {Count} ratings for UserId={UserId}", result.Count, userId);
+        return result;
     }
 
     public async Task<RatingDto?> CreateRatingAsync(int userId, CreateRatingDto dto)
@@ -130,8 +133,9 @@ public class RatingService : IRatingService
         {
             Id = rating.Id,
             BookId = rating.BookId,
+            BookTitle = rating.Book?.Title ?? "Unknown",
             UserId = rating.UserId,
-            Username = rating.User.Username,
+            Username = rating.User?.Username ?? "Unknown",
             Score = rating.Score,
             Comment = rating.Comment,
             CreatedAt = rating.CreatedAt,
