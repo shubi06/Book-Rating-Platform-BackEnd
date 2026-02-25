@@ -123,9 +123,8 @@ builder.Services.AddCors(options =>
                 .WithOrigins(
                     "http://localhost:3000",      // Local development
                     "http://localhost:5173",      // Vite default port
-                    "http://localhost:4200"       // Angular default port
-                    // Shto frontend production URL këtu kur e deploy:
-                    // "https://yourfrontend.com"
+                    "http://localhost:4200",      // Angular default port
+                    "http://51.124.72.116"        // Frontend production URL
                 )
                 .AllowAnyHeader()
                 .AllowAnyMethod()
