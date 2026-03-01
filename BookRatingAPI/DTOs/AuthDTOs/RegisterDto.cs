@@ -2,6 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace BookRatingAPI.DTOs.AuthDTOs;
 
+/// <summary>
+/// DTO for user registration with validation rules.
+/// </summary>
 public class RegisterDto
 {
     [Required(ErrorMessage = "Username is required")]
@@ -14,6 +17,10 @@ public class RegisterDto
     [StringLength(255, ErrorMessage = "Email cannot exceed 255 characters")]
     public string Email { get; set; } = string.Empty;
     
+    /// <summary>
+    /// Password must contain at least one uppercase, lowercase, and digit.
+    /// Minimum 6 characters (consider increasing to 8+ for production).
+    /// </summary>
     [Required(ErrorMessage = "Password is required")]
     [StringLength(100, MinimumLength = 6, ErrorMessage = "Password must be at least 6 characters")]
     [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$", 

@@ -64,6 +64,7 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
 );
+
 builder.Services.AddSingleton<IElasticClient>(sp =>
 {
     var config = builder.Configuration.GetSection("Elasticsearch");
@@ -93,7 +94,8 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IElasticSearchService, ElasticSearchService>();
 builder.Services.AddScoped<IBookSyncService, BookSyncService>();
 
-// Configure JWT authentication
+// Configure JWT authentication (stateless, token-based)
+// SECURITY: Store JWT:Key in Azure Key Vault in production, not appsettings.json
 builder
     .Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -112,7 +114,8 @@ builder
         };
     });
 
-// Configure CORS
+// Configure CORS for frontend access
+// SECURITY: Only specify trusted origins, never use AllowAnyOrigin() with AllowCredentials()
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(
@@ -167,25 +170,23 @@ catch (Exception ex)
     Console.WriteLine($"Warning: Failed to reindex Elasticsearch books: {ex.Message}");
 }
 
-// Configure the HTTP request pipeline
+// Configure HTTP request pipeline
+// IMPORTANT: Middleware order matters - exception handler must be first
 
-// Global exception handler (must be first)
 app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
-
-// Request logging
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-// Enable Swagger in all environments for testing
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// Don't redirect to HTTPS in production (using HTTP LoadBalancer)
+// HTTPS redirection disabled - using HTTP Load Balancer in production
 // app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
 
-app.UseAuthentication();
-app.UseAuthorization();
+// Authentication must come before Authorization
+app.UseAuthentication();  // Validates JWT token, sets HttpContext.User
+app.UseAuthorization();   // Checks [Authorize] attributes and roles
 
 app.MapControllers();
 app.MapHealthChecks("/health");

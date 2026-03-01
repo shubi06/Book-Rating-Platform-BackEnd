@@ -8,6 +8,7 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace BookRatingAPI.Services;
 
+// Service for generating JWT tokens for authenticated users
 public class TokenService : ITokenService
 {
     private readonly IConfiguration _config;
@@ -17,8 +18,11 @@ public class TokenService : ITokenService
         _config = config;
     }
 
+    // Generates a JWT token containing user claims
+    // Token expires after 7 days and is signed with HMAC-SHA256
     public string GenerateToken(User user)
     {
+        // Create claims (user information embedded in token)
         var claims = new[]
         {
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
@@ -27,14 +31,16 @@ public class TokenService : ITokenService
             new Claim(ClaimTypes.Role, user.IsAdmin ? "Admin" : "User")
         };
     
+        // Create signing key from secret (must be at least 256 bits for HS256)
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
     
+        // Build the token
         var token = new JwtSecurityToken(
             issuer: _config["Jwt:Issuer"],
             audience: _config["Jwt:Audience"],
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
+            expires: DateTime.UtcNow.AddDays(7),  // TODO: Implement refresh tokens for longer sessions
             signingCredentials: creds
         );
     

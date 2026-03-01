@@ -8,9 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Controllers;
 
-/// <summary>
-/// Controller for managing books
-/// </summary>
+// Controller for managing books
+// GET endpoints are public, CUD operations require Admin role
 [ApiController]
 [Route("api/[controller]")]
 public class BooksController : ControllerBase
@@ -24,12 +23,8 @@ public class BooksController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Get all books with optional filtering
-    /// </summary>
-    /// <param name="search">Search term for title, author, or description</param>
-    /// <param name="categoryId">Optional category ID to filter by</param>
-    /// <returns>List of books</returns>
+    // GET /api/books
+    // Public endpoint - no authentication required
     [HttpGet]
     public async Task<ActionResult<IEnumerable<BookDto>>> GetBooks(
         [FromQuery] string? search,
@@ -42,11 +37,8 @@ public class BooksController : ControllerBase
         return Ok(books);
     }
 
-    /// <summary>
-    /// Get a specific book by ID
-    /// </summary>
-    /// <param name="id">The ID of the book</param>
-    /// <returns>The book if found</returns>
+    // GET /api/books/{id}
+    // Public endpoint - no authentication required
     [HttpGet("{id}")]
     public async Task<ActionResult<BookDto>> GetBook(int id)
     {
@@ -62,11 +54,12 @@ public class BooksController : ControllerBase
         return Ok(book);
     }
 
-    /// <summary>
-    /// Create a new book (Admin only)
-    /// </summary>
-    /// <param name="dto">Book creation data</param>
-    /// <returns>The created book</returns>
+    // POST /api/books
+    // Requires Admin role - JWT token with "Admin" role claim required
+    // Authorization flow:
+    // 1. UseAuthentication() validates JWT token and sets HttpContext.User
+    // 2. UseAuthorization() checks [Authorize(Roles = "Admin")]
+    // 3. Returns 401 if not authenticated, 403 if not Admin
     [Authorize(Roles = "Admin")]
     [HttpPost]
     public async Task<ActionResult<BookDto>> CreateBook(CreateBookDto dto)
@@ -83,12 +76,8 @@ public class BooksController : ControllerBase
         return CreatedAtAction(nameof(GetBook), new { id = book.Id }, book);
     }
 
-    /// <summary>
-    /// Update an existing book (Admin only)
-    /// </summary>
-    /// <param name="id">The ID of the book to update</param>
-    /// <param name="dto">Updated book data</param>
-    /// <returns>The updated book</returns>
+    // PUT /api/books/{id}
+    // Requires Admin role
     [Authorize(Roles = "Admin")]
     [HttpPut("{id}")]
     public async Task<ActionResult<BookDto>> UpdateBook(int id, CreateBookDto dto)
@@ -112,11 +101,9 @@ public class BooksController : ControllerBase
         return Ok(book);
     }
 
-    /// <summary>
-    /// Delete a book (Admin only)
-    /// </summary>
-    /// <param name="id">The ID of the book to delete</param>
-    /// <returns>No content on success</returns>
+    // DELETE /api/books/{id}
+    // Requires Admin role
+    // Consider implementing soft delete (mark as deleted) instead of hard delete
     [Authorize(Roles = "Admin")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteBook(int id)

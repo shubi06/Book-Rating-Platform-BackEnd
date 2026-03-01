@@ -6,9 +6,8 @@ using Microsoft.Extensions.Logging;
 
 namespace BookRatingAPI.Controllers;
 
-/// <summary>
-/// Controller for user authentication
-/// </summary>
+// Handles user authentication (login and registration)
+// All endpoints are public (no [Authorize] required)
 [ApiController]
 [Route("api/[controller]")]
 public class AuthController : ControllerBase
@@ -22,11 +21,8 @@ public class AuthController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Register a new user
-    /// </summary>
-    /// <param name="dto">Registration data</param>
-    /// <returns>Authentication response with token and user data</returns>
+    // POST /api/auth/register
+    // Registers a new user and returns JWT token
     [HttpPost("register")]
     public async Task<ActionResult<AuthResponseDto>> Register(RegisterDto dto)
     {
@@ -50,11 +46,8 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Authenticate a user
-    /// </summary>
-    /// <param name="dto">Login credentials</param>
-    /// <returns>Authentication response with token and user data</returns>
+    // POST /api/auth/login
+    // Authenticates user and returns JWT token
     [HttpPost("login")]
     public async Task<ActionResult<AuthResponseDto>> Login(LoginDto dto)
     {
@@ -71,6 +64,7 @@ public class AuthController : ControllerBase
         if (result == null)
         {
             _logger.LogWarning("Login failed: Invalid credentials for email {Email}", dto.Email);
+            // Generic error message prevents user enumeration
             return Unauthorized(new { Message = "Invalid credentials" });
         }
 
