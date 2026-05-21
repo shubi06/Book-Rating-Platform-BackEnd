@@ -75,7 +75,15 @@ public class RatingService : IRatingService
         await _context.SaveChangesAsync();
         await _sync.SyncBookAsync(rating.BookId);
         _sync.InvalidateUserRecommendations(userId);
-        await _sync.InvalidateSocialRecommendationsForFollowersOfAsync(userId);
+        try
+        {
+            await _sync.InvalidateSocialRecommendationsForFollowersOfAsync(userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to invalidate social recommendations for followers of UserId={UserId}", userId);
+        }
 
         var user = await _context.Users.FindAsync(userId);
         rating.User = user!;
@@ -102,7 +110,15 @@ public class RatingService : IRatingService
         await _context.SaveChangesAsync();
         await _sync.SyncBookAsync(rating.BookId);
         _sync.InvalidateUserRecommendations(userId);
-        await _sync.InvalidateSocialRecommendationsForFollowersOfAsync(userId);
+        try
+        {
+            await _sync.InvalidateSocialRecommendationsForFollowersOfAsync(userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to invalidate social recommendations for followers of UserId={UserId}", userId);
+        }
 
         var user = await _context.Users.FindAsync(userId);
         rating.User = user!;
@@ -127,7 +143,15 @@ public class RatingService : IRatingService
         await _context.SaveChangesAsync();
         await _sync.RemoveBookAsync(rating.BookId);
         _sync.InvalidateUserRecommendations(userId);
-        await _sync.InvalidateSocialRecommendationsForFollowersOfAsync(userId);
+        try
+        {
+            await _sync.InvalidateSocialRecommendationsForFollowersOfAsync(userId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to invalidate social recommendations for followers of UserId={UserId}", userId);
+        }
 
         _logger.LogInformation("Rating deleted successfully: RatingId={RatingId}", id);
         return true;
