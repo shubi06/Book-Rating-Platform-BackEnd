@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.DTOs.ProfileDTOs;
+using BookRatingAPI.Models.Enums;
 
 namespace BookRatingAPI.Services;
 
@@ -96,6 +97,80 @@ public class ProfileService : IProfileService
                     }
                 })
                 .ToList()
+        };
+    }
+
+    public async Task<ReadingStatsDto?> GetReadingStatsAsync(int userId)
+    {
+        _logger.LogInformation("Fetching reading stats for UserId={UserId}", userId);
+
+        var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+        if (!userExists)
+        {
+            _logger.LogWarning("User not found for reading stats: UserId={UserId}", userId);
+            return null;
+        }
+
+        // Counts pushed to SQL — no row materialization.
+        var booksRead = await _context.ReadingLists
+            .CountAsync(rl => rl.UserId == userId && rl.Status == ReadingStatus.Read);
+
+        var booksWantToRead = await _context.ReadingLists
+            .CountAsync(rl => rl.UserId == userId && rl.Status == ReadingStatus.WantToRead);
+
+        // Cast to double? so AverageAsync returns null instead of throwing when there are no ratings.
+        double? averageRatingGiven = await _context.Ratings
+            .Where(r => r.UserId == userId)
+            .Select(r => (double?)r.Score)
+            .AverageAsync();
+
+        // Favorite category: combine activity from ratings and reading-list entries per category.
+        // Grouped in SQL on both sides; only the small per-category aggregate set comes back.
+        var ratingCategoryCounts = await _context.Ratings
+            .Where(r => r.UserId == userId)
+            .GroupBy(r => r.Book.Category.Name)
+            .Select(g => new { Name = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        var readingCategoryCounts = await _context.ReadingLists
+            .Where(rl => rl.UserId == userId)
+            .GroupBy(rl => rl.Book.Category.Name)
+            .Select(g => new { Name = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        string? favoriteCategory = ratingCategoryCounts
+            .Concat(readingCategoryCounts)
+            .GroupBy(x => x.Name)
+            .Select(g => new { Name = g.Key, Total = g.Sum(x => x.Count) })
+            .OrderByDescending(x => x.Total)
+            .ThenBy(x => x.Name)
+            .FirstOrDefault()?.Name;
+
+        // Most active month: group ratings by (year, month) in SQL; format and tie-break in memory.
+        // ThenBy(Month) ensures the lexicographically earlier month wins on a tie for stable output.
+        var monthCounts = await _context.Ratings
+            .Where(r => r.UserId == userId)
+            .GroupBy(r => new { r.CreatedAt.Year, r.CreatedAt.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .ToListAsync();
+
+        string? mostActiveMonth = monthCounts
+            .Select(m => new { Month = $"{m.Year:D4}-{m.Month:D2}", m.Count })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Month)
+            .FirstOrDefault()?.Month;
+
+        _logger.LogInformation(
+            "Reading stats retrieved for UserId={UserId}: BooksRead={BooksRead}, BooksWantToRead={BooksWantToRead}",
+            userId, booksRead, booksWantToRead);
+
+        return new ReadingStatsDto
+        {
+            BooksRead = booksRead,
+            BooksWantToRead = booksWantToRead,
+            AverageRatingGiven = averageRatingGiven,
+            FavoriteCategory = favoriteCategory,
+            MostActiveMonth = mostActiveMonth
         };
     }
 }

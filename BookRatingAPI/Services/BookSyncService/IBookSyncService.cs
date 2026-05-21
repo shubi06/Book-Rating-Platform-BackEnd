@@ -4,5 +4,6 @@ namespace BookRatingAPI.Services
     {
         Task SyncBookAsync(int bookId);
         Task RemoveBookAsync(int bookId);
+        void InvalidateUserRecommendations(int userId);
     }
 }
