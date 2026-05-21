@@ -95,6 +95,7 @@ builder.Services.AddScoped<IElasticSearchService, ElasticSearchService>();
 builder.Services.AddScoped<IBookSyncService, BookSyncService>();
 builder.Services.AddScoped<IRecommendationsService, RecommendationsService>();
 builder.Services.AddScoped<IFollowService, FollowService>();
+builder.Services.AddScoped<ISimilarReadersService, SimilarReadersService>();
 
 // Configure JWT authentication (stateless, token-based)
 // SECURITY: Store JWT:Key in Azure Key Vault in production, not appsettings.json

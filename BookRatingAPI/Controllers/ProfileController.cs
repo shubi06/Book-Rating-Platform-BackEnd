@@ -20,19 +20,29 @@ public class ProfileController : ControllerBase
 {
     private readonly IProfileService _profileService;
     private readonly IFollowService _followService;
+    private readonly ISimilarReadersService _similarReadersService;
     private readonly ILogger<ProfileController> _logger;
 
     // Feed pagination limits enforced at the HTTP boundary. Kept generous;
     // the service applies its own (stricter) MaxPageSize as a final clamp.
     private const int MaxFeedPageSize = 100;
 
+    // Bounds for the similar-readers limit query parameter. Keep in sync with
+    // BookSyncService.InvalidateSimilarReaders, which performs broad-key removal
+    // across this exact range.
+    private const int MinSimilarReadersLimit = 1;
+    private const int MaxSimilarReadersLimit = 50;
+    private const int DefaultSimilarReadersLimit = 10;
+
     public ProfileController(
         IProfileService profileService,
         IFollowService followService,
+        ISimilarReadersService similarReadersService,
         ILogger<ProfileController> logger)
     {
         _profileService = profileService;
         _followService = followService;
+        _similarReadersService = similarReadersService;
         _logger = logger;
     }
 
@@ -247,5 +257,42 @@ public class ProfileController : ControllerBase
 
         var feed = await _followService.GetActivityFeedAsync(userId, page, pageSize);
         return Ok(feed);
+    }
+
+    /// <summary>
+    /// Get readers most similar to the given user, ranked by Jaccard similarity over
+    /// the set of books both users rated >= 4. IsFollowedByMe reflects the caller's
+    /// follow graph.
+    /// </summary>
+    [HttpGet("{userId}/similar-readers")]
+    public async Task<ActionResult<List<SimilarReaderDto>>> GetSimilarReaders(
+        int userId,
+        [FromQuery] int limit = DefaultSimilarReadersLimit)
+    {
+        if (limit < MinSimilarReadersLimit || limit > MaxSimilarReadersLimit)
+        {
+            return BadRequest(new
+            {
+                Message = $"limit must be between {MinSimilarReadersLimit} and {MaxSimilarReadersLimit}."
+            });
+        }
+
+        if (!TryGetAuthenticatedUserId(out var callerId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
+
+        _logger.LogInformation(
+            "Similar readers request: TargetUserId={TargetUserId}, CallerId={CallerId}, Limit={Limit}",
+            userId, callerId, limit);
+
+        var result = await _similarReadersService.GetSimilarReadersAsync(userId, callerId, limit);
+        if (result == null)
+        {
+            _logger.LogWarning("Similar readers requested for missing user: TargetUserId={TargetUserId}", userId);
+            return NotFound(new { Message = "User not found" });
+        }
+
+        return Ok(result);
     }
 }
