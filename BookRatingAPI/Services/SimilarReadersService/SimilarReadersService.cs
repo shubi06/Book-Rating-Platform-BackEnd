@@ -44,7 +44,11 @@ public class SimilarReadersService : ISimilarReadersService
             return null;
         }
 
-        var cacheKey = $"similar-readers:{targetUserId}:limit:{limit}";
+        // Include the global version segment so a rating mutation anywhere (target-side
+        // or candidate-side) invalidates the whole similarity cache via a single bump
+        // in BookSyncService.InvalidateSimilarReaders.
+        var version = _cache.Get<long?>("similar-readers:version") ?? 0L;
+        var cacheKey = $"similar-readers:v{version}:{targetUserId}:limit:{limit}";
 
         if (_cache.TryGetValue(cacheKey, out List<SimilarReaderRaw>? cached) && cached != null)
         {
