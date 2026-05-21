@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<Category> Categories { get; set; }
     public DbSet<Rating> Ratings { get; set; }
     public DbSet<ReadingList> ReadingLists { get; set; }
+    public DbSet<Follow> Follows { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,5 +24,22 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
 
         modelBuilder.Entity<User>().HasIndex(u => u.Username).IsUnique();
+
+        // Self-referential many-to-many through Follow.
+        // OnDelete must be Restrict: SQL Server forbids multiple cascade paths from one table.
+        modelBuilder.Entity<Follow>(entity =>
+        {
+            entity.HasIndex(f => new { f.FollowerId, f.FolloweeId }).IsUnique();
+
+            entity.HasOne(f => f.Follower)
+                .WithMany(u => u.Following)
+                .HasForeignKey(f => f.FollowerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(f => f.Followee)
+                .WithMany(u => u.Followers)
+                .HasForeignKey(f => f.FolloweeId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 }

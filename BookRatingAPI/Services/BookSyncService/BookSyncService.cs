@@ -30,5 +30,10 @@ namespace BookRatingAPI.Services
 
             await _elastic.DeleteBook(bookId);
         }
+
+        public void InvalidateUserRecommendations(int userId)
+        {
+            _cache.Remove($"recommendations:{userId}");
+        }
     }
 }

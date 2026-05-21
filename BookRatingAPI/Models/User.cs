@@ -33,4 +33,9 @@ public class User
     // Navigation properties for EF Core relationships
     public ICollection<Rating> Ratings { get; set; } = new List<Rating>();
     public ICollection<ReadingList> ReadingLists { get; set; } = new List<ReadingList>();
+
+    // Users this user follows (this user is the Follower in the join row)
+    public ICollection<Follow> Following { get; set; } = new List<Follow>();
+    // Users following this user (this user is the Followee in the join row)
+    public ICollection<Follow> Followers { get; set; } = new List<Follow>();
 }

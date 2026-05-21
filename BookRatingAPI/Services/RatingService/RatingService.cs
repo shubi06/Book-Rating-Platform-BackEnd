@@ -74,6 +74,7 @@ public class RatingService : IRatingService
         _context.Ratings.Add(rating);
         await _context.SaveChangesAsync();
         await _sync.SyncBookAsync(rating.BookId);
+        _sync.InvalidateUserRecommendations(userId);
 
         var user = await _context.Users.FindAsync(userId);
         rating.User = user!;
@@ -99,6 +100,7 @@ public class RatingService : IRatingService
 
         await _context.SaveChangesAsync();
         await _sync.SyncBookAsync(rating.BookId);
+        _sync.InvalidateUserRecommendations(userId);
 
         var user = await _context.Users.FindAsync(userId);
         rating.User = user!;
@@ -122,6 +124,7 @@ public class RatingService : IRatingService
         _context.Ratings.Remove(rating);
         await _context.SaveChangesAsync();
         await _sync.RemoveBookAsync(rating.BookId);
+        _sync.InvalidateUserRecommendations(userId);
 
         _logger.LogInformation("Rating deleted successfully: RatingId={RatingId}", id);
         return true;

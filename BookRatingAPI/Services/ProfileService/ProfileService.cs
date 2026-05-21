@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using BookRatingAPI.Data;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.DTOs.ProfileDTOs;
+using BookRatingAPI.Models.Enums;
 
 namespace BookRatingAPI.Services;
 
@@ -96,6 +97,76 @@ public class ProfileService : IProfileService
                     }
                 })
                 .ToList()
+        };
+    }
+
+    public async Task<ReadingStatsDto?> GetReadingStatsAsync(int userId)
+    {
+        _logger.LogInformation("Fetching reading stats for UserId={UserId}", userId);
+
+        var userExists = await _context.Users.AnyAsync(u => u.Id == userId);
+        if (!userExists)
+        {
+            _logger.LogWarning("User not found for reading stats: UserId={UserId}", userId);
+            return null;
+        }
+
+        var ratings = await _context.Ratings
+            .Include(r => r.Book)
+            .ThenInclude(b => b.Category)
+            .Where(r => r.UserId == userId)
+            .ToListAsync();
+
+        var readingEntries = await _context.ReadingLists
+            .Include(rl => rl.Book)
+            .ThenInclude(b => b.Category)
+            .Where(rl => rl.UserId == userId)
+            .ToListAsync();
+
+        var booksRead = readingEntries.Count(rl => rl.Status == ReadingStatus.Read);
+        var booksWantToRead = readingEntries.Count(rl => rl.Status == ReadingStatus.WantToRead);
+
+        double? averageRatingGiven = ratings.Count > 0
+            ? ratings.Average(r => r.Score)
+            : null;
+
+        // Merge category activity: count of ratings + count of reading list entries per category name.
+        var categoryCounts = ratings
+            .Select(r => r.Book.Category.Name)
+            .Concat(readingEntries.Select(rl => rl.Book.Category.Name))
+            .GroupBy(name => name)
+            .Select(g => new { Category = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        string? favoriteCategory = categoryCounts.Count > 0
+            ? categoryCounts[0].Category
+            : null;
+
+        // Most active month: the "yyyy-MM" string with the most ratings submitted.
+        // ThenBy ensures the lexicographically earlier month wins on a tie (consistent tie-breaking).
+        var monthCounts = ratings
+            .GroupBy(r => r.CreatedAt.ToString("yyyy-MM"))
+            .Select(g => new { Month = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Month)
+            .ToList();
+
+        string? mostActiveMonth = monthCounts.Count > 0
+            ? monthCounts[0].Month
+            : null;
+
+        _logger.LogInformation(
+            "Reading stats retrieved for UserId={UserId}: BooksRead={BooksRead}, BooksWantToRead={BooksWantToRead}",
+            userId, booksRead, booksWantToRead);
+
+        return new ReadingStatsDto
+        {
+            BooksRead = booksRead,
+            BooksWantToRead = booksWantToRead,
+            AverageRatingGiven = averageRatingGiven,
+            FavoriteCategory = favoriteCategory,
+            MostActiveMonth = mostActiveMonth
         };
     }
 }
