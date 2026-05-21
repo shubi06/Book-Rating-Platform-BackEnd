@@ -25,7 +25,11 @@ public class RecommendationsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<BookDto>>> GetRecommendations()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(raw, out var userId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
         _logger.LogInformation("Fetching recommendations for UserId={UserId}", userId);
 
         var recommendations = await _recommendationsService.GetRecommendationsAsync(userId);

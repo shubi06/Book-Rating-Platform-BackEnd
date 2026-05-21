@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using BookRatingAPI.DTOs;
 using BookRatingAPI.DTOs.FollowDTOs;
@@ -22,6 +22,10 @@ public class ProfileController : ControllerBase
     private readonly IFollowService _followService;
     private readonly ILogger<ProfileController> _logger;
 
+    // Feed pagination limits enforced at the HTTP boundary. Kept generous;
+    // the service applies its own (stricter) MaxPageSize as a final clamp.
+    private const int MaxFeedPageSize = 100;
+
     public ProfileController(
         IProfileService profileService,
         IFollowService followService,
@@ -32,6 +36,14 @@ public class ProfileController : ControllerBase
         _logger = logger;
     }
 
+    // JWT validation guarantees the token is valid but not that NameIdentifier
+    // is present or numeric, so we guard rather than int.Parse(...!).
+    private bool TryGetAuthenticatedUserId(out int userId)
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(raw, out userId);
+    }
+
     /// <summary>
     /// Get the authenticated user's profile
     /// </summary>
@@ -39,9 +51,12 @@ public class ProfileController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<ProfileDto>> GetMyProfile()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (!TryGetAuthenticatedUserId(out var userId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
         _logger.LogInformation("Fetching profile for UserId={UserId}", userId);
-        
+
         var profile = await _profileService.GetMyProfileAsync(userId);
 
         if (profile == null)
@@ -78,7 +93,10 @@ public class ProfileController : ControllerBase
     [HttpGet("stats")]
     public async Task<ActionResult<ReadingStatsDto>> GetMyStats()
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (!TryGetAuthenticatedUserId(out var userId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
         _logger.LogInformation("Fetching reading stats for UserId={UserId}", userId);
 
         var stats = await _profileService.GetReadingStatsAsync(userId);
@@ -115,23 +133,23 @@ public class ProfileController : ControllerBase
     [HttpPost("{userId}/follow")]
     public async Task<IActionResult> FollowUser(int userId)
     {
-        var followerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (!TryGetAuthenticatedUserId(out var followerId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
         _logger.LogInformation(
             "Follow request: FollowerId={FollowerId}, FolloweeId={FolloweeId}",
             followerId, userId);
 
-        var (success, error) = await _followService.FollowAsync(followerId, userId);
-        if (!success)
+        var result = await _followService.FollowAsync(followerId, userId);
+        return result switch
         {
-            return error switch
-            {
-                "User not found." => NotFound(new { Message = error }),
-                "You cannot follow yourself." => BadRequest(new { Message = error }),
-                _ => Conflict(new { Message = error })
-            };
-        }
-
-        return NoContent();
+            FollowOperationResult.Success => NoContent(),
+            FollowOperationResult.SelfFollow => BadRequest(new { Message = "You cannot follow yourself." }),
+            FollowOperationResult.UserNotFound => NotFound(new { Message = "User not found." }),
+            FollowOperationResult.AlreadyFollowing => Conflict(new { Message = "You are already following this user." }),
+            _ => StatusCode(500, new { Message = "Unexpected follow result." })
+        };
     }
 
     /// <summary>
@@ -140,18 +158,21 @@ public class ProfileController : ControllerBase
     [HttpDelete("{userId}/follow")]
     public async Task<IActionResult> UnfollowUser(int userId)
     {
-        var followerId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (!TryGetAuthenticatedUserId(out var followerId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
         _logger.LogInformation(
             "Unfollow request: FollowerId={FollowerId}, FolloweeId={FolloweeId}",
             followerId, userId);
 
-        var (success, error) = await _followService.UnfollowAsync(followerId, userId);
-        if (!success)
+        var result = await _followService.UnfollowAsync(followerId, userId);
+        return result switch
         {
-            return NotFound(new { Message = error });
-        }
-
-        return NoContent();
+            FollowOperationResult.Success => NoContent(),
+            FollowOperationResult.NotFollowing => NotFound(new { Message = "You are not following this user." }),
+            _ => StatusCode(500, new { Message = "Unexpected unfollow result." })
+        };
     }
 
     /// <summary>
@@ -207,7 +228,19 @@ public class ProfileController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20)
     {
-        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        if (page < 1 || pageSize < 1 || pageSize > MaxFeedPageSize)
+        {
+            return BadRequest(new
+            {
+                Message = $"page must be >= 1 and pageSize must be between 1 and {MaxFeedPageSize}."
+            });
+        }
+
+        if (!TryGetAuthenticatedUserId(out var userId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
+
         _logger.LogInformation(
             "Feed request: UserId={UserId}, Page={Page}, PageSize={PageSize}",
             userId, page, pageSize);

@@ -46,8 +46,8 @@ The codebase follows a layered architecture with dependency injection throughout
 ### Layers
 - **Controllers** — thin HTTP layer; delegates entirely to services
 - **Services** — all business logic; each has an interface (`IXxxService`) and implementation (`XxxService`)
-- **Data** — `AppDbContext` (EF Core), 5 `DbSet`s
-- **Models** — EF entity classes (`User`, `Book`, `Category`, `Rating`, `ReadingList`)
+- **Data** — `AppDbContext` (EF Core), 6 `DbSet`s
+- **Models** — EF entity classes (`User`, `Book`, `Category`, `Rating`, `ReadingList`, `Follow`)
 - **DTOs** — one folder per domain; no entities leak out of services
 - **Middleware** — `GlobalExceptionHandlerMiddleware` (first in pipeline), `RequestLoggingMiddleware`
 
@@ -68,6 +68,7 @@ The codebase follows a layered architecture with dependency injection throughout
 | `Category` | Id, Name | — |
 | `Rating` | Id, UserId, BookId, Score (1–5), Comment | (UserId, BookId) — one rating per user per book |
 | `ReadingList` | Id, UserId, BookId, Status | (UserId, BookId) — one entry per user per book |
+| `Follow` | Id, FollowerId, FolloweeId, CreatedAt | (FollowerId, FolloweeId) — one follow per follower-followee pair |
 
 `ReadingStatus` enum: `WantToRead = 1`, `Read = 2`
 
@@ -79,7 +80,8 @@ The codebase follows a layered architecture with dependency injection throughout
 | `BooksController` | `/api/books` | GET: public; CUD: Admin role | SQL LIKE search via `?search=`, filter by `?categoryId=` |
 | `RatingsController` | `/api/ratings` | Most: any auth; GET book ratings: public | One rating per user per book enforced in service |
 | `ReadingListController` | `/api/readinglist` | All: any auth | Filter by `?status=` |
-| `ProfileController` | `/api/profile` | GET own: auth; GET `/{userId}`: public | Public profile returns last 5 ratings |
+| `ProfileController` | `/api/profile` | Varies | Public profile, reading stats, follow/unfollow, followers/following, activity feed |
+| `RecommendationsController` | `/api/recommendations` | All: any auth | Personalized recommendations from the user's top-rated categories (cold-start: top-rated overall) |
 | `ElasticSearchController` | `/api/elasticsearch` | None | Fuzzy search, top-rated, by category/year, rating filter, sort, reindex |
 | Health check | `/health` | None | ASP.NET Core health checks |
 
@@ -98,6 +100,7 @@ JWT claims: `NameIdentifier` (userId), `Email`, `Name` (username), `Role` ("Admi
 - `GetBooksAsync` (no search): cached under `"books:all"` or `"books:category:{id}"` for 5 min
 - `GetBookByIdAsync`: cached under `"book:{id}"` for 10 min
 - Cache is invalidated by `BookSyncService.SyncBookAsync` / `RemoveBookAsync` on every mutation
+- `RecommendationsService` caches personalized results under `"recommendations:{userId}"` for 2 min; invalidated by `BookSyncService.InvalidateUserRecommendations` on every rating mutation
 
 ## Conventions
 
@@ -122,16 +125,18 @@ JWT claims: `NameIdentifier` (userId), `Email`, `Name` (username), `Role` ("Admi
 
 ## Repository layout
 
-```
+```text
 Book-Rating-Platform/
 ├── BookRatingAPI/
 │   ├── Controllers/        # HTTP layer — AuthController, BooksController, RatingsController,
-│   │                       #   ReadingListController, ProfileController, ElasticSearchController
+│   │                       #   ReadingListController, ProfileController, RecommendationsController,
+│   │                       #   ElasticSearchController
 │   ├── Data/               # AppDbContext (EF Core)
 │   ├── DTOs/               # Data transfer objects, grouped by domain
 │   │   ├── AuthDTOs/
 │   │   ├── BookDTOs/
 │   │   ├── CategoryDTOs/
+│   │   ├── FollowDTOs/
 │   │   ├── ProfileDTOs/
 │   │   ├── RatingDTOs/
 │   │   └── ReadingListDtos.cs
@@ -144,9 +149,11 @@ Book-Rating-Platform/
 │   │   ├── BookSyncService/ # Keeps ES + cache in sync after mutations
 │   │   ├── CategoryService/
 │   │   ├── ElasticSearchService/
+│   │   ├── FollowService/
 │   │   ├── ProfileService/
 │   │   ├── RatingService/
 │   │   ├── ReadingListService/
+│   │   ├── RecommendationsService/
 │   │   └── TokenService/    # JWT generation
 │   ├── appsettings.json     # Connection strings, ES config, JWT config, log levels
 │   ├── global.json          # SDK version pin (8.0.0)

@@ -111,50 +111,54 @@ public class ProfileService : IProfileService
             return null;
         }
 
-        var ratings = await _context.Ratings
-            .Include(r => r.Book)
-            .ThenInclude(b => b.Category)
+        // Counts pushed to SQL — no row materialization.
+        var booksRead = await _context.ReadingLists
+            .CountAsync(rl => rl.UserId == userId && rl.Status == ReadingStatus.Read);
+
+        var booksWantToRead = await _context.ReadingLists
+            .CountAsync(rl => rl.UserId == userId && rl.Status == ReadingStatus.WantToRead);
+
+        // Cast to double? so AverageAsync returns null instead of throwing when there are no ratings.
+        double? averageRatingGiven = await _context.Ratings
             .Where(r => r.UserId == userId)
+            .Select(r => (double?)r.Score)
+            .AverageAsync();
+
+        // Favorite category: combine activity from ratings and reading-list entries per category.
+        // Grouped in SQL on both sides; only the small per-category aggregate set comes back.
+        var ratingCategoryCounts = await _context.Ratings
+            .Where(r => r.UserId == userId)
+            .GroupBy(r => r.Book.Category.Name)
+            .Select(g => new { Name = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        var readingEntries = await _context.ReadingLists
-            .Include(rl => rl.Book)
-            .ThenInclude(b => b.Category)
+        var readingCategoryCounts = await _context.ReadingLists
             .Where(rl => rl.UserId == userId)
+            .GroupBy(rl => rl.Book.Category.Name)
+            .Select(g => new { Name = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        var booksRead = readingEntries.Count(rl => rl.Status == ReadingStatus.Read);
-        var booksWantToRead = readingEntries.Count(rl => rl.Status == ReadingStatus.WantToRead);
+        string? favoriteCategory = ratingCategoryCounts
+            .Concat(readingCategoryCounts)
+            .GroupBy(x => x.Name)
+            .Select(g => new { Name = g.Key, Total = g.Sum(x => x.Count) })
+            .OrderByDescending(x => x.Total)
+            .ThenBy(x => x.Name)
+            .FirstOrDefault()?.Name;
 
-        double? averageRatingGiven = ratings.Count > 0
-            ? ratings.Average(r => r.Score)
-            : null;
+        // Most active month: group ratings by (year, month) in SQL; format and tie-break in memory.
+        // ThenBy(Month) ensures the lexicographically earlier month wins on a tie for stable output.
+        var monthCounts = await _context.Ratings
+            .Where(r => r.UserId == userId)
+            .GroupBy(r => new { r.CreatedAt.Year, r.CreatedAt.Month })
+            .Select(g => new { g.Key.Year, g.Key.Month, Count = g.Count() })
+            .ToListAsync();
 
-        // Merge category activity: count of ratings + count of reading list entries per category name.
-        var categoryCounts = ratings
-            .Select(r => r.Book.Category.Name)
-            .Concat(readingEntries.Select(rl => rl.Book.Category.Name))
-            .GroupBy(name => name)
-            .Select(g => new { Category = g.Key, Count = g.Count() })
-            .OrderByDescending(x => x.Count)
-            .ToList();
-
-        string? favoriteCategory = categoryCounts.Count > 0
-            ? categoryCounts[0].Category
-            : null;
-
-        // Most active month: the "yyyy-MM" string with the most ratings submitted.
-        // ThenBy ensures the lexicographically earlier month wins on a tie (consistent tie-breaking).
-        var monthCounts = ratings
-            .GroupBy(r => r.CreatedAt.ToString("yyyy-MM"))
-            .Select(g => new { Month = g.Key, Count = g.Count() })
+        string? mostActiveMonth = monthCounts
+            .Select(m => new { Month = $"{m.Year:D4}-{m.Month:D2}", m.Count })
             .OrderByDescending(x => x.Count)
             .ThenBy(x => x.Month)
-            .ToList();
-
-        string? mostActiveMonth = monthCounts.Count > 0
-            ? monthCounts[0].Month
-            : null;
+            .FirstOrDefault()?.Month;
 
         _logger.LogInformation(
             "Reading stats retrieved for UserId={UserId}: BooksRead={BooksRead}, BooksWantToRead={BooksWantToRead}",

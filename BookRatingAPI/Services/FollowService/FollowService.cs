@@ -13,6 +13,9 @@ public class FollowService : IFollowService
 
     private const int MaxPageSize = 50;
     private const int DefaultPageSize = 20;
+    // Hard cap on rows pulled per source during feed assembly. Without this,
+    // a request for page=1000&pageSize=50 would pull 50,000 rows twice.
+    private const int MaxFeedFetchWindow = 1000;
 
     public FollowService(AppDbContext context, ILogger<FollowService> logger)
     {
@@ -20,19 +23,19 @@ public class FollowService : IFollowService
         _logger = logger;
     }
 
-    public async Task<(bool Success, string? Error)> FollowAsync(int followerId, int followeeId)
+    public async Task<FollowOperationResult> FollowAsync(int followerId, int followeeId)
     {
         if (followerId == followeeId)
         {
             _logger.LogWarning("Self-follow attempt by UserId={UserId}", followerId);
-            return (false, "You cannot follow yourself.");
+            return FollowOperationResult.SelfFollow;
         }
 
         var targetExists = await _context.Users.AnyAsync(u => u.Id == followeeId);
         if (!targetExists)
         {
             _logger.LogWarning("Follow target not found: FolloweeId={FolloweeId}", followeeId);
-            return (false, "User not found.");
+            return FollowOperationResult.UserNotFound;
         }
 
         var already = await _context.Follows
@@ -42,7 +45,7 @@ public class FollowService : IFollowService
             _logger.LogInformation(
                 "Duplicate follow ignored: FollowerId={FollowerId}, FolloweeId={FolloweeId}",
                 followerId, followeeId);
-            return (false, "You are already following this user.");
+            return FollowOperationResult.AlreadyFollowing;
         }
 
         _context.Follows.Add(new Follow
@@ -55,10 +58,10 @@ public class FollowService : IFollowService
         _logger.LogInformation(
             "Follow created: FollowerId={FollowerId}, FolloweeId={FolloweeId}",
             followerId, followeeId);
-        return (true, null);
+        return FollowOperationResult.Success;
     }
 
-    public async Task<(bool Success, string? Error)> UnfollowAsync(int followerId, int followeeId)
+    public async Task<FollowOperationResult> UnfollowAsync(int followerId, int followeeId)
     {
         var follow = await _context.Follows
             .FirstOrDefaultAsync(f => f.FollowerId == followerId && f.FolloweeId == followeeId);
@@ -68,7 +71,7 @@ public class FollowService : IFollowService
             _logger.LogWarning(
                 "Unfollow target not found: FollowerId={FollowerId}, FolloweeId={FolloweeId}",
                 followerId, followeeId);
-            return (false, "You are not following this user.");
+            return FollowOperationResult.NotFollowing;
         }
 
         _context.Follows.Remove(follow);
@@ -77,7 +80,7 @@ public class FollowService : IFollowService
         _logger.LogInformation(
             "Follow removed: FollowerId={FollowerId}, FolloweeId={FolloweeId}",
             followerId, followeeId);
-        return (true, null);
+        return FollowOperationResult.Success;
     }
 
     public async Task<List<FollowUserDto>?> GetFollowersAsync(int userId)
@@ -160,8 +163,9 @@ public class FollowService : IFollowService
 
         // Cap each per-source fetch at the high-water mark for this page; merge in memory.
         // Avoids the cost of a SQL UNION across heterogeneous projections while keeping
-        // the working set bounded to ~2 * page * pageSize rows.
-        var fetchLimit = page * pageSize;
+        // the working set bounded to ~2 * fetchLimit rows. MaxFeedFetchWindow prevents a
+        // very large `page` from forcing oversized reads.
+        var fetchLimit = Math.Min(page * pageSize, MaxFeedFetchWindow);
 
         var ratingItems = await _context.Ratings
             .Where(r => followedIds.Contains(r.UserId))
