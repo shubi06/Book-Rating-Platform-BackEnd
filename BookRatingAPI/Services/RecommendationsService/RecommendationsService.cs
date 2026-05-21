@@ -15,6 +15,7 @@ namespace BookRatingAPI.Services
         private const int TopCategoryCount = 3;
         private const int RecommendationLimit = 10;
         private const int CacheTtlMinutes = 2;
+        private const int SocialMinScore = 4;
 
         public RecommendationsService(
             AppDbContext context,
@@ -106,6 +107,96 @@ namespace BookRatingAPI.Services
                     RatingCount = x.RatingCount,
                 })
                 .ToListAsync();
+        }
+
+        public async Task<List<BookDto>> GetSocialRecommendationsAsync(int userId)
+        {
+            var cacheKey = $"recommendations:social:{userId}";
+
+            if (_cache.TryGetValue(cacheKey, out List<BookDto>? cached) && cached != null)
+            {
+                _logger.LogInformation(
+                    "Returning cached social recommendations for UserId={UserId}", userId);
+                return cached;
+            }
+
+            var followeeIds = await _context.Follows
+                .Where(f => f.FollowerId == userId)
+                .Select(f => f.FolloweeId)
+                .ToListAsync();
+
+            List<BookDto> result;
+
+            if (followeeIds.Count == 0)
+            {
+                _logger.LogInformation(
+                    "No follows for UserId={UserId}; returning empty social recommendations", userId);
+                result = new List<BookDto>();
+            }
+            else
+            {
+                var bookLatest = await _context.Ratings
+                    .Where(r =>
+                        followeeIds.Contains(r.UserId)
+                        && r.Score >= SocialMinScore
+                        && !_context.Ratings.Any(rr => rr.UserId == userId && rr.BookId == r.BookId)
+                        && !_context.ReadingLists.Any(rl => rl.UserId == userId && rl.BookId == r.BookId))
+                    .GroupBy(r => r.BookId)
+                    .Select(g => new { BookId = g.Key, LatestRatedAt = g.Max(r => r.CreatedAt) })
+                    .OrderByDescending(x => x.LatestRatedAt)
+                    .Take(RecommendationLimit)
+                    .ToListAsync();
+
+                var topBookIds = bookLatest.Select(x => x.BookId).ToList();
+
+                var books = await _context.Books
+                    .Where(b => topBookIds.Contains(b.Id))
+                    .Select(b => new
+                    {
+                        b.Id,
+                        b.Title,
+                        b.Author,
+                        b.Description,
+                        b.CoverImageUrl,
+                        b.PublicationYear,
+                        b.ISBN,
+                        b.CategoryId,
+                        CategoryName = b.Category.Name,
+                        AvgRating = b.Ratings.Any()
+                            ? b.Ratings.Average(r => (double)r.Score)
+                            : 0.0,
+                        RatingCount = b.Ratings.Count(),
+                    })
+                    .ToListAsync();
+
+                var orderIndex = bookLatest
+                    .Select((x, i) => new { x.BookId, Index = i })
+                    .ToDictionary(x => x.BookId, x => x.Index);
+
+                result = books
+                    .OrderBy(b => orderIndex[b.Id])
+                    .Select(b => new BookDto
+                    {
+                        Id = b.Id,
+                        Title = b.Title,
+                        Author = b.Author,
+                        Description = b.Description,
+                        CoverImageUrl = b.CoverImageUrl,
+                        PublicationYear = b.PublicationYear,
+                        ISBN = b.ISBN,
+                        CategoryId = b.CategoryId,
+                        CategoryName = b.CategoryName,
+                        AverageRating = b.AvgRating,
+                        RatingCount = b.RatingCount,
+                    })
+                    .ToList();
+            }
+
+            _cache.Set(cacheKey, result, TimeSpan.FromMinutes(CacheTtlMinutes));
+            _logger.LogInformation(
+                "Cached {Count} social recommendations for UserId={UserId}", result.Count, userId);
+
+            return result;
         }
 
         private async Task<List<BookDto>> GetColdStartRecommendationsAsync()

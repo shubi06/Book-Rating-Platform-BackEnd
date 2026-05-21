@@ -6,5 +6,6 @@ namespace BookRatingAPI.Services
         Task RemoveBookAsync(int bookId);
         void InvalidateUserRecommendations(int userId);
         void InvalidateSimilarReaders(int userId);
+        Task InvalidateSocialRecommendationsForFollowersOfAsync(int userId);
     }
 }
