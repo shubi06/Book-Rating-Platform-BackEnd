@@ -1,3 +1,5 @@
+using BookRatingAPI.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace BookRatingAPI.Services
@@ -6,11 +8,13 @@ namespace BookRatingAPI.Services
     {
         private readonly IMemoryCache _cache;
         private readonly IElasticSearchService _elastic;
+        private readonly AppDbContext _context;
 
-        public BookSyncService(IMemoryCache cache, IElasticSearchService elastic)
+        public BookSyncService(IMemoryCache cache, IElasticSearchService elastic, AppDbContext context)
         {
             _cache = cache;
             _elastic = elastic;
+            _context = context;
         }
 
         public async Task SyncBookAsync(int bookId)
@@ -34,6 +38,19 @@ namespace BookRatingAPI.Services
         public void InvalidateUserRecommendations(int userId)
         {
             _cache.Remove($"recommendations:{userId}");
+        }
+
+        public async Task InvalidateSocialRecommendationsForFollowersOfAsync(int userId)
+        {
+            var followerIds = await _context.Follows
+                .Where(f => f.FolloweeId == userId)
+                .Select(f => f.FollowerId)
+                .ToListAsync();
+
+            foreach (var followerId in followerIds)
+            {
+                _cache.Remove($"recommendations:social:{followerId}");
+            }
         }
     }
 }

@@ -39,4 +39,24 @@ public class RecommendationsController : ControllerBase
 
         return Ok(recommendations);
     }
+
+    [HttpGet("social")]
+    public async Task<ActionResult<List<BookDto>>> GetSocialRecommendations()
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!int.TryParse(raw, out var userId))
+        {
+            return Unauthorized(new { Message = "Invalid or missing user identifier." });
+        }
+        _logger.LogInformation("Fetching social recommendations for UserId={UserId}", userId);
+
+        var recommendations = await _recommendationsService.GetSocialRecommendationsAsync(userId);
+
+        _logger.LogInformation(
+            "Returning {Count} social recommendations for UserId={UserId}",
+            recommendations.Count,
+            userId);
+
+        return Ok(recommendations);
+    }
 }
